@@ -1,0 +1,971 @@
+:root {
+  color-scheme: dark light;
+  font-family: "Montserrat", "Noto Sans SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* UI scale controlled by JS fit engine (fallback to 1) */
+  --app-scale: 1;
+  /* Motion + easing */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 放慢默认时长，使动效更沉稳 */
+  --fast: 180ms; --mid: 320ms; --slow: 480ms;
+  /* Playful bright background with subtle pattern */
+  --bg-gradient:
+    radial-gradient(1100px 700px at 15% 20%, rgba(120, 160, 255, 0.12), transparent 60%),
+    radial-gradient(1000px 800px at 85% 10%, rgba(90, 230, 180, 0.10), transparent 60%),
+    linear-gradient(160deg, #f6f9ff, #eef7ff);
+  /* Panels: frosted-white cards */
+  --panel-bg: rgba(255, 255, 255, 0.72);
+  --panel-border: rgba(30, 50, 80, 0.12);
+  --panel-shadow: 0 12px 34px rgba(107, 133, 166, 0.20);
+  --accent: #23b4ff;
+  --accent-strong: #0aa0ef;
+  /* Text tuned for light UI */
+  --text-strong: #17212b;
+  --text-dim: rgba(23, 33, 43, 0.62);
+  /* Cell size will be tuned by JS; keep a broad clamp for sensible defaults */
+  --cell-size: clamp(34px, 8.2vmin, 96px);
+  --disc-size: calc(var(--cell-size) * 0.82);
+  /* 默认主题：浅色简约（亚麻/浅木调） */
+  --board-bg: linear-gradient(135deg, #efe6d6, #e5d2b6);
+  --board-border: linear-gradient(145deg, rgba(255, 220, 160, 0.58), rgba(190, 150, 90, 0.42));
+  --board-shadow: 0 24px 48px rgba(140, 110, 60, 0.28);
+  --hint-color: rgba(30, 140, 240, 0.80);
+  --move-ring: rgba(255, 165, 0, 0.95);
+  /* Subtle scrollbars (light) */
+  --scrollbar-track: rgba(30, 50, 80, 0.06);
+  --scrollbar-thumb: rgba(30, 50, 80, 0.28);
+  --scrollbar-thumb-hover: rgba(30, 50, 80, 0.42);
+  /* Gameover scrim */
+  --go-scrim: rgba(10, 14, 20, 0.45);
+  /* Selects (light) */
+  --select-bg: rgba(255, 255, 255, 0.85);
+  --select-border: rgba(30, 50, 80, 0.16);
+  --select-fg: #0e1b24;
+  --select-arrow: #0e1b24;
+}
+
+/* Dark mode palette */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-gradient:
+      radial-gradient(1200px 600px at 15% 20%, rgba(40, 140, 220, 0.18), transparent 60%),
+      radial-gradient(1000px 800px at 85% 10%, rgba(255, 120, 190, 0.14), transparent 60%),
+      linear-gradient(160deg, #0c1220, #0a1118);
+    --panel-bg: rgba(16, 20, 28, 0.76);
+    --panel-border: rgba(123, 201, 255, 0.16);
+    --panel-shadow: 0 12px 42px rgba(0, 0, 0, 0.45);
+    --accent: #4dd4ff;
+    --accent-strong: #16b8f7;
+    --text-strong: #eaf3ff;
+    --text-dim: rgba(214, 225, 255, 0.72);
+    /* 深色模式下亦保持冷色石板风格（默认主题） */
+    --board-bg: linear-gradient(135deg, #0a1b28, #091521);
+    --board-border: linear-gradient(145deg, rgba(77, 212, 255, 0.55), rgba(35, 180, 255, 0.38));
+    --board-shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
+    --hint-color: rgba(77, 212, 255, 0.75);
+    --move-ring: rgba(255, 196, 0, 0.95);
+    /* Dark scrollbars */
+    --scrollbar-track: rgba(255, 255, 255, 0.06);
+    --scrollbar-thumb: rgba(200, 220, 255, 0.25);
+    --scrollbar-thumb-hover: rgba(200, 220, 255, 0.35);
+    --go-scrim: rgba(0, 0, 0, 0.55);
+    /* Selects (dark) */
+    --select-bg: rgba(16, 20, 28, 0.92);
+    --select-border: rgba(123, 201, 255, 0.28);
+    --select-fg: #eaf3ff;
+    --select-arrow: #a9d8ff;
+  }
+  /* Component-specific dark tweaks */
+  .moves-panel h2, .tips-panel h2 { color: rgba(255, 255, 255, 0.78); }
+  .footer { color: rgba(255, 255, 255, 0.6); }
+  .footer-info { color: rgba(255, 255, 255, 0.75); }
+  button, button.ghost, button.primary { color: #eaf3ff; }
+  kbd {
+    background: rgba(77, 212, 255, 0.18);
+    color: #eaf3ff;
+    border-color: rgba(77, 212, 255, 0.35);
+  }
+  .gameover { color: var(--text-strong); }
+  .progress .black { background: linear-gradient(90deg, #4a5568, #243040); }
+  .progress .white { background: linear-gradient(90deg, #e6e6e6, #bdbdbd); }
+  .score { background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+  .score.white .label { color: rgba(255, 255, 255, 0.85); }
+  .score.black .label { color: rgba(220, 220, 220, 0.8); }
+}
+
+/* 强制默认主题的棋盘为浅色（无论系统深浅色），不影响木纹主题 */
+.app:not(.theme-wood) {
+  --board-bg: linear-gradient(135deg, #efe6d6, #e5d2b6);
+  --board-border: linear-gradient(145deg, rgba(255, 220, 160, 0.58), rgba(190, 150, 90, 0.42));
+  --board-shadow: 0 24px 48px rgba(140, 110, 60, 0.28);
+}
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-gradient);
+  color: var(--text-strong);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+}
+
+.app {
+  min-height: 100vh;
+  width: clamp(340px, 98vw, 2100px);
+  padding: clamp(18px, 3vw, 32px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: clamp(20px, 3.2vw, 32px);
+  transform-origin: top center;
+  will-change: transform;
+  /* Use CSS variable so JS can scale only when necessary */
+  transform: scale(var(--app-scale));
+}
+
+/* Fixed viewport wrapper for scale-to-fit */
+.fit-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+}
+
+.top-bar { display: grid; gap: 10px; }
+
+.brand {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.logo {
+  width: clamp(40px, 6vw, 60px);
+  height: clamp(40px, 6vw, 60px);
+  display: grid;
+  place-items: center;
+  font-size: clamp(24px, 5vw, 36px);
+  border-radius: 18px;
+  background: linear-gradient(145deg, #ffd36e, #ff9ed1 60%, #7ad5ff);
+  color: var(--text-strong);
+  box-shadow: 0 10px 22px rgba(255, 174, 74, 0.35);
+}
+
+.title-wrap h1 {
+  margin: 0;
+  font-size: clamp(18px, 3.4vw, 28px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #0f6ab9, #039d7a, #ff8a3d);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.title-wrap p {
+  margin: 4px 0 0;
+  font-size: clamp(10px, 2vw, 13px);
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.status-panels { display: grid; gap: 12px; grid-template-columns: 1fr; }
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  padding: clamp(12px, 2vw, 18px);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(14px) saturate(1.1);
+  min-width: 240px;
+  animation: panelIn var(--slow) var(--ease) both;
+}
+.status-panels .panel:nth-child(1) { animation-delay: 30ms; }
+.status-panels .panel:nth-child(2) { animation-delay: 90ms; }
+.status-panels .panel:nth-child(3) { animation-delay: 150ms; }
+
+.score-panel { display: grid; grid-template-rows: auto auto auto; gap: 8px; }
+
+.scores {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+}
+
+.score {
+  text-align: center;
+  flex: 1;
+  background: rgba(20, 40, 60, 0.05);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: inset 0 0 0 1px rgba(20, 40, 60, 0.08);
+}
+
+.score .label {
+  display: block;
+  font-size: 0.85rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.score.white .label, .score.black .label { color: var(--text-dim); }
+
+.score .value {
+  display: block;
+  font-size: clamp(20px, 2.6vw, 30px);
+  font-weight: 800;
+  margin-top: 6px;
+  letter-spacing: 0.1em;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: linear-gradient(90deg, rgba(230, 236, 245, 0.9), rgba(240, 250, 255, 0.6));
+  border: 1px solid rgba(20, 40, 60, 0.08);
+}
+
+.progress span { flex-basis: 50%; transition: flex-basis 200ms ease; }
+.progress .black { background: linear-gradient(90deg, #566173, #2d3c4e); }
+.progress .white { background: linear-gradient(90deg, #f0f0f0, #cfcfcf); }
+
+/* 分数条变更时的脉冲高亮动画 */
+.progress.pulse .black,
+.progress.pulse .white {
+  animation: barPulse 420ms ease-out both;
+}
+@keyframes barPulse {
+  0% { filter: brightness(1.05); box-shadow: inset 0 0 0 0 rgba(35, 180, 255, 0.16); }
+  60% { filter: brightness(1.0); box-shadow: inset 0 0 0 6px rgba(35, 180, 255, 0.08); }
+  100% { filter: none; box-shadow: none; }
+}
+
+.turn { font-size: 1rem; font-weight: 600; color: var(--text-strong); }
+
+.msg { min-height: 1.2em; color: var(--text-dim); font-size: 0.95rem; }
+
+.cpu-panel { min-width: 0; }
+
+.cpu-panel h2 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+label { font-size: 0.85rem; color: var(--text-dim); display: flex; flex-direction: column; gap: 6px; }
+
+/* 隐藏原生 select，保留在 DOM 用于逻辑与回退 */
+select.enhanced-native {
+  position: absolute !important;
+  width: 1px !important; height: 1px !important;
+  padding: 0 !important; margin: -1px !important;
+  overflow: hidden !important; clip: rect(0,0,0,0) !important;
+  white-space: nowrap !important; border: 0 !important;
+}
+
+/* 自定义下拉：按钮 + 漂浮面板 */
+.fancy-select { position: relative; width: 100%; }
+.fancy-select .fs-btn {
+  display: flex; align-items: center; justify-content: flex-start;
+  gap: 8px; width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--select-bg);
+  color: var(--select-fg);
+  border: 1px solid var(--select-border);
+  font-size: 0.95rem; font-weight: 600;
+  cursor: pointer;
+  transition: border 160ms ease, box-shadow 160ms ease, background 160ms ease, transform 160ms ease;
+}
+.fancy-select .fs-btn:hover { border-color: rgba(35, 180, 255, 0.35); transform: translateY(-1px); }
+.fancy-select .fs-btn:focus { outline: none; box-shadow: 0 0 0 3px rgba(35, 180, 255, 0.25); border-color: var(--accent); }
+.fancy-select .fs-btn::after {
+  content: ""; display: block; width: 10px; height: 6px; margin-left: auto;
+  background: var(--select-arrow);
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  opacity: 0.75; transition: transform 160ms ease, opacity 160ms ease;
+}
+.fancy-select.open .fs-btn::after { transform: rotate(180deg); opacity: 0.9; }
+.fancy-select .fs-panel {
+  position: absolute; left: 0; right: 0; top: calc(100% + 8px);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px; box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(14px) saturate(1.1);
+  padding: 6px; display: none; z-index: 50;
+  max-height: min(320px, 40vh); overflow: auto;
+  animation: fsPanelIn var(--mid) var(--ease) both;
+}
+.fancy-select.open .fs-panel { display: block; }
+@keyframes fsPanelIn { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+.fs-option { display: flex; align-items: center; gap: 8px; padding: 10px 10px; border-radius: 8px; cursor: pointer; color: var(--text-strong); }
+.fs-option:hover { background: rgba(35, 180, 255, 0.12); }
+.fs-option[aria-selected="true"] { background: rgba(35, 180, 255, 0.18); font-weight: 700; }
+.fs-option .fs-badge { margin-left: auto; font-size: 0.72rem; color: var(--text-dim); opacity: 0.85; }
+
+/* Label 内布局：让自定义下拉撑满 */
+label .fancy-select { margin-top: 6px; }
+
+.switch {
+  position: relative;
+  padding-left: 52px;
+  align-items: center;
+  min-height: 32px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.switch .slider {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 24px;
+  background: rgba(140, 160, 190, 0.35);
+  border-radius: 12px;
+  transition: background 160ms ease;
+}
+
+.switch .slider::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  width: 18px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.switch input:checked + .slider { background: rgba(35, 180, 255, 0.6); }
+
+.switch input:checked + .slider::before {
+  transform: translateX(20px);
+  box-shadow: 0 0 12px rgba(35, 180, 255, 0.55);
+}
+
+.actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: linear-gradient(145deg, rgba(35, 180, 255, 0.18), rgba(255, 180, 80, 0.18));
+  color: var(--text-strong);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--fast) var(--ease-out), box-shadow var(--mid) var(--ease-out), border var(--mid) var(--ease-out), background var(--mid) var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(35, 180, 255, 0.25);
+  border-color: rgba(35, 180, 255, 0.35);
+}
+
+button:active { transform: translateY(0) scale(0.98); }
+
+/* 移除点击涟漪，保留干净的点击态（更稳重） */
+/* 可选：若未来需要再启用，建议仅在重要按钮上局部添加 */
+
+button.primary { background: linear-gradient(145deg, #23b4ff, #ffa74d); color: var(--text-strong); }
+
+button.ghost { background: transparent; border-color: rgba(30, 50, 80, 0.22); color: var(--text-strong); }
+
+button.sm { padding: 6px 10px; font-size: 0.85rem; }
+
+.arena { display: grid; grid-template-columns: 1fr clamp(260px, 28vw, 420px); gap: clamp(16px, 2.6vw, 26px); align-items: start; min-height: 0; }
+
+.board-wrap {
+  position: relative;
+  justify-self: center;
+}
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(8, var(--cell-size));
+  grid-template-rows: repeat(8, var(--cell-size));
+  gap: calc(var(--cell-size) * 0.045);
+  background: var(--board-bg);
+  padding: calc(var(--cell-size) * 0.1);
+  border: 12px solid transparent;
+  border-radius: clamp(16px, 3vw, 26px);
+  box-shadow: var(--board-shadow);
+  position: relative;
+  overflow: hidden;
+  animation: boardIn var(--slow) var(--ease) both;
+}
+
+#board::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 3px;
+  background: var(--board-border);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* 默认主题的棋盘纹理（轻纸纹 + 顶部高光） */
+#board::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* 叠加细腻纸纹与高光（无铆钉） */
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0, rgba(255,255,255,0.06) 2px, rgba(0,0,0,0.05) 3px, rgba(0,0,0,0.05) 5px),
+    radial-gradient(1200px 700px at 50% -10%, rgba(255,255,255,0.22), rgba(255,255,255,0) 60%);
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+
+.cell {
+  width: var(--cell-size);
+  height: var(--cell-size);
+  /* 默认主题：浅色亚麻/浅木格（对黑白子皆有对比） */
+  background:
+    radial-gradient(18px 18px at 30% 28%, rgba(255,255,255,0.25), rgba(255,255,255,0) 70%),
+    linear-gradient(180deg, #f7f1e6, #e9dcc7),
+    repeating-linear-gradient(120deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 3px, rgba(255,255,255,0.06) 4px, rgba(255,255,255,0.06) 7px);
+  background-blend-mode: screen, multiply, normal;
+  border-radius: clamp(8px, 1.4vw, 12px);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transition: transform var(--mid) var(--ease-out), box-shadow var(--mid) var(--ease-out), outline-color var(--mid) var(--ease-out);
+  contain: layout paint;
+}
+
+.cell:hover {
+  outline: 2px solid rgba(255, 174, 74, 0.30);
+  transform: translateY(-1px) scale(1.012);
+  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0,0,0,0.2);
+}
+
+.disc {
+  width: var(--disc-size);
+  height: var(--disc-size);
+  border-radius: 50%;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  transform-origin: center;
+  position: relative;
+  will-change: transform, filter; /* smoother animation on file:// */
+}
+
+/* 棋子渐变（更立体，带边缘高光与柔和高亮） */
+.disc.black {
+  background:
+    radial-gradient(65% 60% at 30% 28%, #6a6a6a, #141414 70%),
+    radial-gradient(38% 36% at 70% 78%, rgba(255,255,255,0.14), rgba(255,255,255,0) 70%),
+    conic-gradient(from 220deg at 50% 50%, rgba(255,255,255,0.08), rgba(255,255,255,0) 40%);
+}
+.disc.white {
+  background:
+    radial-gradient(65% 60% at 30% 28%, #ffffff, #d8d8d8 72%),
+    radial-gradient(38% 36% at 70% 78%, rgba(255,255,255,0.65), rgba(255,255,255,0) 70%),
+    conic-gradient(from 220deg at 50% 50%, rgba(255,255,255,0.18), rgba(255,255,255,0) 40%);
+}
+/* 细窄外圈，暗示厚度 */
+.disc::before {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(0,0,0,0.28), inset 0 6px 8px rgba(0,0,0,0.18);
+  pointer-events: none;
+}
+
+/* 新：使用 .hint-dot 元素避免与坐标伪元素冲突 */
+.hint::after { content: none; }
+.hint-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--hint-color);
+  opacity: 0.66;
+  box-shadow: 0 0 8px rgba(77,212,255,0.45);
+  animation: hintPulse 1.4s var(--ease-out) infinite;
+  pointer-events: none;
+}
+
+@keyframes hintPulse {
+  0% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.5; }
+  50% { transform: translate(-50%, -50%) scale(1); opacity: 0.95; }
+  100% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.5; }
+}
+
+.last-move::after { content: none; }
+.cell.last-move .disc::after {
+  content: "";
+  position: absolute;
+  inset: 0; /* 跟随棋子本体尺寸，避免比例误差 */
+  border-radius: 50%;
+  box-sizing: border-box;
+  /* 使用外发光描边形成环，更稳定不变形 */
+  box-shadow:
+    0 0 0 3px var(--move-ring),
+    0 0 16px rgba(255, 196, 0, 0.55),
+    inset 0 0 10px rgba(255, 196, 0, 0.35);
+  pointer-events: none;
+  animation: ringPop 420ms var(--ease-out) both;
+}
+
+/* no pulsing to reduce distraction */
+
+.disc.place { animation: placeDrop 560ms var(--ease-out) both; }
+@keyframes placeDrop {
+  0%   { transform: translateY(-16%) scale(0.94) rotateX(3deg); filter: brightness(1.02); }
+  55%  { transform: translateY(0)    scale(1.015) rotateX(0deg); filter: brightness(1.0); }
+  80%  { transform: translateY(-1%)  scale(0.997); }
+  100% { transform: translateY(0)    scale(1); }
+}
+
+/* playful sparkle burst when placing */
+.disc.place::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(255, 210, 90, 0.5), rgba(255, 210, 90, 0) 60%);
+  animation: burst 520ms ease-out both;
+  pointer-events: none;
+}
+@keyframes burst {
+  0% { transform: scale(0.75); opacity: 0.85; }
+  100% { transform: scale(1.18); opacity: 0; }
+}
+
+/* 翻子：颜色渐变切换（旧色覆盖层淡出，露出新色） */
+.disc.colorflip { /* 保持静态，无 3D 翻转 */ }
+.disc.colorflip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 1;
+  /* 延迟沿用 --flip-delay，形成连锁波次 */
+  /* 稍微放慢渐变节奏（原 480ms -> 560ms） */
+  animation: colorFade 560ms var(--ease) both;
+  animation-delay: var(--flip-delay, 0ms);
+}
+/* 新子为黑：覆盖层展示旧的白色外观，淡出以显露黑色底 */
+.disc.black.colorflip::after {
+  background:
+    radial-gradient(65% 60% at 30% 28%, #ffffff, #d8d8d8 72%),
+    radial-gradient(38% 36% at 70% 78%, rgba(255,255,255,0.65), rgba(255,255,255,0) 70%),
+    conic-gradient(from 220deg at 50% 50%, rgba(255,255,255,0.18), rgba(255,255,255,0) 40%);
+}
+/* 新子为白：覆盖层展示旧的黑色外观，淡出以显露白色底 */
+.disc.white.colorflip::after {
+  background:
+    radial-gradient(65% 60% at 30% 28%, #6a6a6a, #141414 70%),
+    radial-gradient(38% 36% at 70% 78%, rgba(255,255,255,0.14), rgba(255,255,255,0) 70%),
+    conic-gradient(from 220deg at 50% 50%, rgba(255,255,255,0.08), rgba(255,255,255,0) 40%);
+}
+@keyframes colorFade {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* 坐标显示（首列显示行号，底行显示列字母） */
+#board.show-coords .cell[data-col="0"]::before {
+  content: attr(data-rowlabel);
+  position: absolute;
+  left: calc(-0.6rem - 6px);
+  color: rgba(255,255,255,0.7);
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+#board.show-coords .cell[data-row="7"]::after {
+  content: attr(data-collabel);
+  position: absolute;
+  bottom: calc(-0.8rem - 6px);
+  color: rgba(255,255,255,0.7);
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.board-shadow {
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(70% 80% at 50% 110%, rgba(60, 80, 100, 0.18), transparent 70%);
+  filter: blur(16px);
+  z-index: -1;
+}
+
+/* 对局结束覆盖层 */
+.gameover[hidden] { display: none; }
+.gameover {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--go-scrim);
+  color: var(--text-strong);
+}
+.gameover::before { content: none; display: none; }
+.go-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: clamp(14px, 2.6vw, 20px);
+  box-shadow: var(--panel-shadow);
+  min-width: clamp(220px, 36vw, 420px);
+  text-align: center;
+  backdrop-filter: blur(8px) saturate(1.05);
+}
+.gameover .go-title { font-size: clamp(18px, 2.6vw, 24px); font-weight: 800; margin-bottom: 6px; }
+.gameover .go-sub { color: var(--text-dim); margin-bottom: 12px; }
+
+.sidebar { display: grid; gap: 12px; max-height: 100%; overflow: auto; }
+
+.moves-panel, .tips-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--panel-shadow);
+}
+
+.moves-panel h2, .tips-panel h2 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+#move-list {
+  margin: 0;
+  padding-left: 1.4em;
+  font-variant-numeric: tabular-nums;
+  /* Keep the whole UI within one page: shorter panel to free room for board */
+  max-height: clamp(100px, 22vh, 220px);
+  overflow: auto;
+}
+
+#move-list li { margin: 4px 0; opacity: 0.86; animation: fadeSlide 240ms var(--ease-out) both; }
+#move-list li:last-child { color: var(--accent-strong); font-weight: 700; }
+
+.tips-panel ul {
+  margin: 0;
+  padding-left: 1.2em;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.tips-panel li { color: var(--text-dim); display: flex; align-items: center; gap: 10px; }
+
+kbd {
+  font-family: inherit;
+  background: rgba(35, 180, 255, 0.18);
+  color: var(--text-strong);
+  border-radius: 8px;
+  padding: 4px 8px;
+  border: 1px solid rgba(35, 180, 255, 0.35);
+  font-size: 0.9rem;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.footer-info { color: var(--text-dim); }
+
+/* Thinking spinner */
+#msg.thinking::before, #turn.thinking::before {
+  content: "";
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 6px;
+  border-radius: 50%;
+  border: 2px solid rgba(35, 180, 255, 0.7);
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+  vertical-align: -0.1em;
+}
+
+@keyframes spin {
+  from { transform: rotate(0); }
+  to { transform: rotate(360deg); }
+}
+
+/* --- UI Animations --- */
+@keyframes panelIn { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes boardIn { from { transform: translateY(8px) scale(0.995); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes discIn { from { transform: scale(0.98); opacity: 0.0; } to { transform: scale(1); opacity: 1; } }
+@keyframes ringPop { from { box-shadow: 0 0 0 0 rgba(255,196,0,0.0), 0 0 0 rgba(0,0,0,0); } to { box-shadow: 0 0 0 3px var(--move-ring), 0 0 16px rgba(255, 196, 0, 0.55), inset 0 0 10px rgba(255, 196, 0, 0.35); } }
+@keyframes fadeSlide { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* ripple 已移除 */
+
+/* Responsive */
+@media (max-width: 1080px) {
+  .top-bar {
+    grid-template-columns: 1fr;
+  }
+  .arena {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .sidebar {
+    width: min(540px, 96vw);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .brand { justify-content: center; }
+  .footer { flex-direction: column; gap: 8px; text-align: center; }
+}
+
+/* When scaled down a lot, tighten paddings slightly */
+@media (max-height: 640px) {
+  .panel { padding: 14px; }
+  .actions { margin-top: 12px; }
+}
+
+/* 专注对局模式：隐藏侧栏，棋盘最大化 */
+.app.focus-mode .sidebar { display: none !important; }
+.app.focus-mode .arena { grid-template-columns: 1fr; }
+
+/* ================================== */
+/* 主题：木纹棋盘 + 绿色绒面格子       */
+/* ================================== */
+.app.theme-wood {
+  /* 更克制的温暖底色（纸质感） */
+  --bg-gradient:
+    radial-gradient(1000px 700px at 12% 12%, rgba(230, 180, 120, 0.06), transparent 60%),
+    radial-gradient(900px 900px at 86% 14%, rgba(210, 150, 110, 0.05), transparent 60%),
+    linear-gradient(160deg, #f9f4ec, #fffaf2);
+  /* 木框主体：浅色栎/枫木 + 油蜡光晕分层 */
+  --board-bg:
+    linear-gradient(94deg, #e6c79c 0%, #d6b383 32%, #cda574 62%, #e2c492 100%),
+    radial-gradient(140% 110% at 50% -10%, rgba(255, 238, 200, 0.46), rgba(255, 238, 200, 0)),
+    linear-gradient(180deg, rgba(255, 245, 220, 0.24), rgba(255, 245, 220, 0) 28%, rgba(0,0,0,0.18) 90%, rgba(0,0,0,0.22));
+  /* 倒角高光（上左）与阴影（下右） */
+  --board-border: linear-gradient(145deg, rgba(255, 232, 180, 0.60), rgba(160, 110, 60, 0.35));
+  --board-shadow: 0 22px 48px rgba(120, 90, 40, 0.28);
+  /* 提示光圈统一为清亮蓝 */
+  --hint-color: rgba(30, 140, 240, 0.80);
+}
+.app.theme-wood #board {
+  background: var(--board-bg);
+}
+.app.theme-wood #board::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* 新木纹：多频率纵向纹理 + 微妙结疤 + 漆面高光 */
+  background:
+    /* 主纤维：柔波状深浅交替 */
+    repeating-linear-gradient(97deg,
+      rgba(255, 232, 200, 0.045) 0px,
+      rgba(255, 232, 200, 0.045) 5px,
+      rgba(62, 34, 16, 0.07) 6px,
+      rgba(62, 34, 16, 0.07) 14px
+    ),
+    /* 次级纤维：短节理，避免完美平行 */
+    repeating-linear-gradient(86deg,
+      rgba(255, 242, 214, 0.028) 0px,
+      rgba(255, 242, 214, 0.028) 2px,
+      rgba(38, 22, 10, 0.05) 3px,
+      rgba(38, 22, 10, 0.05) 6px
+    ),
+    /* 结疤/猫眼：两处柔和高光+暗影 */
+    radial-gradient(360px 240px at 26% 32%, rgba(255, 214, 158, 0.20), rgba(90, 50, 24, 0.0) 70%),
+    radial-gradient(420px 300px at 74% 68%, rgba(255, 210, 150, 0.18), rgba(80, 44, 20, 0.0) 68%),
+    /* 边缘加深 + 光亮（覆盖整板） */
+    radial-gradient(120% 140% at 50% 120%, rgba(0, 0, 0, 0.22), transparent 70%),
+    linear-gradient(180deg, rgba(255,255,255,0.18), transparent 26%, rgba(0,0,0,0.22) 86%, rgba(0,0,0,0.28));
+  mix-blend-mode: soft-light;
+  opacity: 0.96;
+}
+.app.theme-wood .cell {
+  /* 浅木格：枫/桦木调，细纤维 + 微高光（无绿色） */
+  background:
+    radial-gradient(18px 18px at 30% 28%, rgba(255,255,255,0.22), rgba(255,255,255,0) 70%),
+    linear-gradient(180deg, #f6e7cd, #e9cfa9),
+    repeating-linear-gradient(95deg,
+      rgba(255, 238, 210, 0.24) 0px,
+      rgba(255, 238, 210, 0.24) 3px,
+      rgba(160, 120, 80, 0.08) 4px,
+      rgba(160, 120, 80, 0.08) 8px
+    );
+  background-blend-mode: screen, multiply, normal;
+  box-shadow: inset 0 -3px 6px rgba(0,0,0,0.22), inset 0 10px 22px rgba(255,255,255,0.08);
+}
+.app.theme-wood .cell:hover { outline: 2px solid rgba(230, 160, 60, 0.28); }
+.app.theme-wood .board-shadow {
+  background: radial-gradient(72% 82% at 50% 110%, rgba(120, 90, 40, 0.20), transparent 72%);
+}
+
+
+/* ------------------------------- */
+/* Decorative playful floating dots */
+/* ------------------------------- */
+.decor-bubbles {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0; /* behind .app */
+}
+.decor-bubbles span {
+  --x: 10%;
+  --size: 10px;
+  --delay: 0s;
+  --dur: 12s;
+  position: absolute;
+  left: var(--x);
+  bottom: -40px;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.15));
+  box-shadow: 0 6px 16px rgba(150, 200, 255, 0.35);
+  filter: saturate(1.1);
+  animation: floatUp var(--dur) linear var(--delay) infinite;
+}
+@keyframes floatUp {
+  0% { transform: translate3d(-10px, 0, 0) scale(1); opacity: 0.0; }
+  10% { opacity: 0.6; }
+  50% { transform: translate3d(20px, -40vh, 0) scale(1.15); }
+  100% { transform: translate3d(-10px, -100vh, 0) scale(0.9); opacity: 0; }
+}
+
+/* motion reduction */
+@media (prefers-reduced-motion: reduce) {
+  .decor-bubbles span { animation: none; opacity: 0.12; }
+  .disc.place::before { animation: none; opacity: 0; }
+  .disc.colorflip::after { animation: none; opacity: 0; }
+}
+
+/* ------------------------------- */
+/* Subtle Scrollbar Styling        */
+/* ------------------------------- */
+.sidebar, #move-list {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.sidebar::-webkit-scrollbar, #move-list::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.sidebar::-webkit-scrollbar-track, #move-list::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 8px;
+}
+.sidebar::-webkit-scrollbar-thumb, #move-list::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.sidebar::-webkit-scrollbar-thumb:hover, #move-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ---------------------------------- */
+/* Coordinate Popup (right-click cell) */
+/* ---------------------------------- */
+.coord-popup {
+  position: fixed;
+  z-index: 3000;
+  display: none;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(14px) saturate(1.1);
+  color: var(--text-strong);
+  min-width: 104px;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+.coord-popup.show { display: block; animation: panelIn var(--mid) var(--ease) both; }
+.coord-popup::after {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent 60%);
+  border-top-left-radius: 12px; border-top-right-radius: 12px;
+  pointer-events: none;
+}
+.coord-popup .coord-title {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0 0 6px;
+}
+.coord-popup .coord-value {
+  font-size: 1.24rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--accent-strong);
+}

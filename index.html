@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>黑白棋：极智对决</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="manifest" href="assets/manifest.webmanifest" />
+  <meta name="theme-color" content="#23b4ff" />
+  <link rel="icon" href="assets/icons/icon-192.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.svg" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="沉浸式黑白棋对战，支持人机/AI 对决、多强度、实时棋谱。" />
+  </head>
+  <body>
+  <div class="fit-root">
+  <!-- 装饰性漂浮气泡，不影响交互 -->
+  <div class="decor-bubbles" aria-hidden="true">
+    <span style="--x: 8%; --size: 12px; --delay: .0s; --dur: 16s"></span>
+    <span style="--x: 18%; --size: 8px; --delay: .8s; --dur: 12s"></span>
+    <span style="--x: 28%; --size: 16px; --delay: 1.5s; --dur: 18s"></span>
+    <span style="--x: 38%; --size: 10px; --delay: .4s; --dur: 14s"></span>
+    <span style="--x: 50%; --size: 14px; --delay: 1.2s; --dur: 17s"></span>
+    <span style="--x: 62%; --size: 9px;  --delay: .3s; --dur: 13s"></span>
+    <span style="--x: 72%; --size: 12px; --delay: 2.0s; --dur: 16s"></span>
+    <span style="--x: 82%; --size: 7px;  --delay: 1.7s; --dur: 12s"></span>
+    <span style="--x: 90%; --size: 15px; --delay: .9s; --dur: 15s"></span>
+    <span style="--x: 25%; --size: 6px;  --delay: 2.6s; --dur: 13s"></span>
+  </div>
+  <div class="app">
+    <header class="top-bar">
+      <div class="brand">
+        <div class="logo">♞</div>
+        <div class="title-wrap">
+          <h1>黑白棋：极智对决</h1>
+          <p>沉浸式 AI 棋战 · 实时算力</p>
+        </div>
+        <div style="flex:1"></div>
+        <button id="install" class="ghost sm" style="display:none" title="安装为应用">安装应用</button>
+        <button id="theme" class="ghost sm" title="切换棋盘主题">浅色木纹</button>
+        <button id="focus" class="ghost sm" title="切换专注对局(F)">专注对局</button>
+      </div>
+    </header>
+
+    <main class="arena">
+      <div class="board-wrap">
+        <div id="board" aria-label="棋盘" class="show-coords"></div>
+        <div class="board-shadow"></div>
+        <div id="gameover" class="gameover" hidden>
+          <div class="go-card">
+            <div class="go-title"></div>
+            <div class="go-sub"></div>
+            <button id="go-reset" class="primary">再来一局</button>
+          </div>
+        </div>
+      </div>
+      <aside class="sidebar" aria-label="对局信息">
+        <div class="status-panels">
+          <div class="panel score-panel">
+            <div class="scores">
+              <div class="score black">
+                <span class="label">黑</span>
+                <span id="score-black" class="value">2</span>
+              </div>
+              <div class="score white">
+                <span class="label">白</span>
+                <span id="score-white" class="value">2</span>
+              </div>
+            </div>
+            <div class="progress" id="scorebar" aria-label="子力比例">
+              <span class="black"></span>
+              <span class="white"></span>
+            </div>
+            <div class="turn" id="turn">当前轮到：黑棋</div>
+            <div class="msg" id="msg"></div>
+          </div>
+          <div class="panel cpu-panel">
+            <h2>对战配置</h2>
+          <div class="control-grid">
+              <label>模式
+                <select id="mode">
+                  <option value="hh">人类 vs 人类</option>
+                  <option value="hb" selected>人类(黑) vs AI(白)</option>
+                  <option value="bh">AI(黑) vs 人类(白)</option>
+                  <option value="aa">AI vs AI</option>
+                </select>
+              </label>
+              <label>强度
+                <select id="strength">
+                  <option value="fast">快</option>
+                  <option value="balanced" selected>平衡</option>
+                  <option value="strong">强</option>
+                  <option value="ultra">特强</option>
+                </select>
+              </label>
+              <label>线程
+                <select id="threads" title="并行线程数">
+                  <option value="auto" selected>自动</option>
+                  <option value="2">2</option>
+                  <option value="4">4</option>
+                  <option value="8">8</option>
+                  <option value="max">全部</option>
+                </select>
+              </label>
+              <label class="switch">显示提示
+                <input id="showHints" type="checkbox" checked />
+                <span class="slider"></span>
+              </label>
+              <label class="switch">显示坐标
+                <input id="showCoords" type="checkbox" checked />
+                <span class="slider"></span>
+              </label>
+              <label class="switch">音效
+                <input id="sndEnable" type="checkbox" checked />
+                <span class="slider"></span>
+              </label>
+              <label>音量
+                <input id="sndVolume" type="range" min="0" max="100" value="55" />
+              </label>
+            </div>
+            <div class="actions">
+              <button id="pause" class="ghost" style="display:none">暂停</button>
+              <button id="undo">悔棋</button>
+              <button id="reset" class="primary">重新开始</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel moves-panel">
+          <h2>实时棋谱</h2>
+          <ol id="move-list"></ol>
+        </div>
+        <div class="panel tips-panel">
+          <h2>快捷操作</h2>
+          <ul>
+            <li><kbd>U</kbd> 悔棋</li>
+            <li><kbd>R</kbd> 重新开始</li>
+            <li><kbd>H</kbd> 切换提示</li>
+            <li><kbd>C</kbd> 切换坐标</li>
+          </ul>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <div>© 2025 made by 尘 | Othello AI</div>
+      <div class="footer-info">提示：光圈为可落子；最后落子会有光环提示。</div>
+    </footer>
+  </div>
+  </div>
+
+  <!-- 智能加载器：HTTP(S) 下加载模块源码；file:// 下回退到打包版 -->
+  <script>
+    (function(){
+      var s = document.createElement('script');
+      if (location.protocol !== 'file:') {
+        s.type = 'module';
+        s.src = 'src/main.js';
+      } else {
+        s.src = 'dist/app.js';
+      }
+      document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
+    })();
+  </script>
+  <!-- 内联一屏自适配脚本：在 file:// 模式下也启用新版排版，无需服务器 -->
+  <script>
+    (function(){
+      if (window.requestFit) return; // 模块版已提供
+
+      function px(n){ return Math.max(0, parseFloat(n)||0); }
+
+      function computeAvailable(){
+        const app = document.querySelector('.app');
+        const arena = document.querySelector('.arena');
+        const sidebar = document.querySelector('.sidebar');
+        const topBar = document.querySelector('.top-bar');
+        const footer = document.querySelector('.footer');
+        if (!app || !arena) return null;
+
+        const vw = window.innerWidth, vh = window.innerHeight;
+
+        const csApp = getComputedStyle(app);
+        const padY = px(csApp.paddingTop) + px(csApp.paddingBottom);
+        const rowGap = px(csApp.rowGap || csApp.gap);
+
+        const topH = topBar ? topBar.getBoundingClientRect().height : 0;
+        const footH = footer ? footer.getBoundingClientRect().height : 0;
+        const arenaMaxH = Math.max(0, vh - padY - topH - footH - rowGap*2);
+
+        const arenaRect = arena.getBoundingClientRect();
+        let boardMaxW = arenaRect.width;
+        // 如果为两列布局，则扣除侧栏和列间距
+        const csArena = getComputedStyle(arena);
+        const cols = (csArena.gridTemplateColumns || '').trim().split(/\s+/);
+        const twoCols = cols.length >= 2; // 已解析为具体值，例如 "1fr 380px"
+        if (twoCols && sidebar) {
+          const sbr = sidebar.getBoundingClientRect();
+          const colGap = px(csArena.columnGap || csArena.gap);
+          boardMaxW = Math.max(0, arenaRect.width - sbr.width - colGap);
+        }
+        return { vw, vh, boardMaxW, boardMaxH: arenaMaxH };
+      }
+
+      function fitLayout(){
+        const app = document.querySelector('.app');
+        if (!app) return;
+        const doc = document.documentElement;
+
+        // 先取消缩放，保证测量不受影响
+        const prevTransform = app.style.transform;
+        const prevScaleVar = doc.style.getPropertyValue('--app-scale');
+        app.style.transform = 'none';
+        doc.style.setProperty('--app-scale', '1');
+
+        const avail = computeAvailable();
+        if (!avail) { app.style.transform = prevTransform || ''; if (prevScaleVar) doc.style.setProperty('--app-scale', prevScaleVar); return; }
+
+        // 棋盘整体像素：W = p*(8 + 7*0.045 + 2*0.1) + 24 = 8.515p + 24
+        const unit = 8 + 7*0.045 + 2*0.1; // 8.515
+        const borderPx = 24; // 12px 左右边框总和
+        const pxW = (avail.boardMaxW - borderPx) / unit;
+        const pxH = (avail.boardMaxH - borderPx) / unit;
+        let cell = Math.floor(Math.max(16, Math.min(pxW, pxH)));
+
+        // 应用单元格像素
+        doc.style.setProperty('--cell-size', cell + 'px');
+
+        // 二次校验整体是否需要缩小（不放大，保持清晰）
+        const r = app.getBoundingClientRect();
+        let s = 1;
+        if (r.width > avail.vw || r.height > avail.vh) {
+          s = Math.min(1, avail.vw / r.width, avail.vh / r.height);
+        }
+        doc.style.setProperty('--app-scale', String(s));
+
+        // 还原行内 transform（交由 CSS 使用 --app-scale 控制）
+        app.style.transform = prevTransform || '';
+      }
+
+      let raf = 0;
+      window.requestFit = function(){
+        if (raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(function(){ fitLayout(); raf = 0; });
+      };
+
+      function start(){
+        window.requestFit();
+        window.addEventListener('resize', window.requestFit);
+        const appEl = document.querySelector('.app');
+        if (appEl && 'MutationObserver' in window) {
+          const mo = new MutationObserver(()=>window.requestFit());
+          mo.observe(appEl, { childList: true, subtree: true, characterData: true });
+        }
+      }
+      if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', start); } else { start(); }
+      window.addEventListener('load', ()=>window.requestFit && window.requestFit());
+    })();
+  </script>
+  <!-- PWA：注册 Service Worker（仅在安全上下文下） -->
+  <script>
+    (function(){
+      if ('serviceWorker' in navigator && window.isSecureContext) {
+        navigator.serviceWorker.register('sw.js').catch(()=>{});
+      }
+    })();
+  </script>
+  <!-- 安装按钮：处理 beforeinstallprompt 事件（Chrome/Edge 桌面/安卓） -->
+  <script>
+    (function(){
+      let deferred;
+      const btn = document.getElementById('install');
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferred = e;
+        if (btn) btn.style.display = '';
+      });
+      if (btn) {
+        btn.addEventListener('click', async ()=>{
+          if (!deferred) return;
+          btn.disabled = true;
+          try {
+            deferred.prompt();
+            await deferred.userChoice;
+            btn.style.display = 'none';
+          } catch(_) {
+          } finally {
+            deferred = null;
+            btn.disabled = false;
+          }
+        });
+      }
+      window.addEventListener('appinstalled', ()=>{
+        if (btn) btn.style.display = 'none';
+      });
+    })();
+  </script>
+  <!-- 专注对局模式（file 下也可用） -->
+  <script>
+    (function(){
+      // 仅在 file:// 模式下启用此后备逻辑，避免与模块版重复绑定
+      if (location.protocol !== 'file:') return;
+      // FLIP 动画辅助：切换布局前后，平滑移动棋盘
+      function flipBoard(doToggle){
+        const app = document.querySelector('.app');
+        const wrap = document.querySelector('.board-wrap');
+        if (!app || !wrap) { doToggle(); return; }
+        const first = wrap.getBoundingClientRect();
+        doToggle();
+        // 可能伴随 reflow（尤其 file 模式下 requestFit 生效）
+        if (window.requestFit) window.requestFit();
+        const last = wrap.getBoundingClientRect();
+        const dx = first.left - last.left;
+        const dy = first.top - last.top;
+        const sx = first.width ? first.width / last.width : 1;
+        const sy = first.height ? first.height / last.height : 1;
+        // 应用逆变换，再过渡到正常位
+        wrap.style.willChange = 'transform';
+        wrap.style.transformOrigin = 'top left';
+        wrap.style.transition = 'none';
+        wrap.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+        // 强制回流，确保起始状态生效
+        void wrap.offsetWidth;
+        requestAnimationFrame(()=>{
+          wrap.style.transition = 'transform 360ms cubic-bezier(0.22, 1, 0.36, 1)';
+          wrap.style.transform = 'none';
+          const clear = ()=>{
+            wrap.style.transition = '';
+            wrap.style.transform = '';
+            wrap.style.willChange = '';
+            wrap.removeEventListener('transitionend', clear);
+          };
+          wrap.addEventListener('transitionend', clear);
+        });
+      }
+
+      function toggle(){
+        flipBoard(()=>{
+          document.querySelector('.app')?.classList.toggle('focus-mode');
+        });
+        localStorage.setItem('focus-mode', document.querySelector('.app')?.classList.contains('focus-mode') ? '1' : '0');
+      }
+      function start(){
+        const btn = document.getElementById('focus');
+        if (btn) btn.addEventListener('click', toggle);
+        window.addEventListener('keydown', (e)=>{ if((e.key==='f'||e.key==='F') && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); toggle(); }});
+        // restore state
+        if (localStorage.getItem('focus-mode') === '1') {
+          document.querySelector('.app')?.classList.add('focus-mode');
+        }
+        // 主题切换（file 下同样可用）
+        const themeBtn = document.getElementById('theme');
+        if (themeBtn) {
+          const app = document.querySelector('.app');
+          const saved = localStorage.getItem('theme') || 'default';
+          if (saved === 'wood') app.classList.add('theme-wood');
+          themeBtn.textContent = app.classList.contains('theme-wood') ? '清爽外观' : '木纹外观';
+          themeBtn.addEventListener('click', ()=>{
+            const appEl = document.querySelector('.app');
+            appEl.classList.toggle('theme-wood');
+            const cur = appEl.classList.contains('theme-wood') ? 'wood' : 'default';
+            localStorage.setItem('theme', cur);
+            themeBtn.textContent = appEl.classList.contains('theme-wood') ? '清爽外观' : '木纹外观';
+            if (window.requestFit) window.requestFit();
+          });
+        }
+
+        // file 模式下的自定义下拉后备增强
+        function enhanceFancySelect(selectEl, items){
+          if (!selectEl || selectEl._enhanced) return;
+          selectEl._enhanced = true;
+          selectEl.classList.add('enhanced-native');
+          const wrap = document.createElement('div');
+          wrap.className = 'fancy-select';
+          const btn = document.createElement('button'); btn.type='button'; btn.className='fs-btn';
+          btn.setAttribute('aria-haspopup','listbox'); btn.setAttribute('aria-expanded','false');
+          const panel = document.createElement('div'); panel.className='fs-panel'; panel.setAttribute('role','listbox');
+          const current = () => items.find(i=>i.value===selectEl.value) || items[0];
+          const setBtnText = () => { btn.textContent = (current().label || ''); };
+          const close = () => { wrap.classList.remove('open'); btn.setAttribute('aria-expanded','false'); };
+          const open = () => { wrap.classList.add('open'); btn.setAttribute('aria-expanded','true'); };
+          const toggle = () => { if (wrap.classList.contains('open')) close(); else open(); };
+          const renderOptions = ()=>{
+            panel.innerHTML='';
+            items.forEach(it=>{
+              const opt = document.createElement('div'); opt.className='fs-option'; opt.setAttribute('role','option');
+              opt.setAttribute('data-value', it.value); opt.setAttribute('aria-selected', String(selectEl.value===it.value));
+              opt.textContent = it.label; if (it.badge){ const b=document.createElement('span'); b.className='fs-badge'; b.textContent=it.badge; opt.appendChild(b); }
+              opt.addEventListener('click', ()=>{ if (selectEl.value!==it.value){ selectEl.value=it.value; selectEl.dispatchEvent(new Event('change',{bubbles:true})); } setBtnText(); renderOptions(); close(); });
+              panel.appendChild(opt);
+            });
+          };
+          setBtnText(); renderOptions(); btn.addEventListener('click', toggle);
+          document.addEventListener('click', (e)=>{ if(!wrap.contains(e.target)) close(); });
+          selectEl.parentNode.insertBefore(wrap, selectEl.nextSibling);
+          wrap.appendChild(btn); wrap.appendChild(panel);
+        }
+
+        const selMode = document.getElementById('mode');
+        const selStr  = document.getElementById('strength');
+        const selTh   = document.getElementById('threads');
+        enhanceFancySelect(selMode, [
+          { value: 'hh', label: '人类 vs 人类' },
+          { value: 'hb', label: '人类(黑) vs AI(白)' },
+          { value: 'bh', label: 'AI(黑) vs 人类(白)' },
+          { value: 'aa', label: 'AI vs AI', badge: '演示' },
+        ]);
+        enhanceFancySelect(selStr, [
+          { value: 'fast', label: '快' },
+          { value: 'balanced', label: '平衡' },
+          { value: 'strong', label: '强' },
+          { value: 'ultra', label: '特强' },
+        ]);
+        enhanceFancySelect(selTh, [
+          { value: 'auto', label: '自动' },
+          { value: '2', label: '2' },
+          { value: '4', label: '4' },
+          { value: '8', label: '8' },
+          { value: 'max', label: '全部' },
+        ]);
+      }
+      if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', start); else start();
+    })();
+  </script>
+</body>
+</html>

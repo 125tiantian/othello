@@ -1,0 +1,26 @@
+{
+  "name": "黑白棋：极智对决",
+  "short_name": "黑白棋",
+  "description": "沉浸式黑白棋对战，支持人机/AI、多强度、多线程、提示/坐标、悔棋/重开、实时棋谱与柔和音效。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a1118",
+  "theme_color": "#23b4ff",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
