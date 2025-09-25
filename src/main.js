@@ -58,8 +58,7 @@ function fitLayout() {
   app.style.transform = prevTransform || '';
 }
 
-// Bootstrap the app (guard against double init)
-window.addEventListener('DOMContentLoaded', () => {
+function bootstrap() {
   if (window.__OTHELLO_BOOTSTRAPPED__) return;
   window.__OTHELLO_BOOTSTRAPPED__ = true;
   new OthelloApp();
@@ -86,7 +85,14 @@ window.addEventListener('DOMContentLoaded', () => {
     });
     mo.observe(appEl, { childList: true, subtree: true, characterData: true });
   }
-});
+}
+
+// Bootstrap immediately if DOM 已经就绪，否则等待 DOMContentLoaded
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', bootstrap, { once: true });
+} else {
+  bootstrap();
+}
 
 // Also run after full load to account for fonts/layout shifts
 window.addEventListener('load', () => window.requestFit && window.requestFit());
