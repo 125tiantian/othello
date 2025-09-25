@@ -643,8 +643,6 @@ export class AIEngine {
     const edgeDiff = myEdge - oppEdge;
 
     // longest horizontal/vertical runs (bias vs diagonal over-valuation)
-    const myBoard = player === BLACK ? black : white;
-    const oppBoard = player === BLACK ? white : black;
     const longestRun = (bb, isVertical) => {
       let best = 0;
       if (!isVertical) {
