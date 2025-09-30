@@ -357,6 +357,9 @@
         const r = Number(cell.dataset.row), c = Number(cell.dataset.col);
         this.showCoordPopup && this.showCoordPopup(r, c);
       });
+      // dock 模式：悬停棋盘展开胜利卡
+      this.boardEl.addEventListener('mouseenter', ()=>{ var go=document.getElementById('gameover'); if(go && go.classList.contains('docked')) go.classList.add('reveal'); });
+      this.boardEl.addEventListener('mouseleave', ()=>{ var go=document.getElementById('gameover'); if(go && go.classList.contains('docked')) go.classList.remove('reveal'); });
     }
     document.addEventListener('mousedown', (e)=>{
       if (!this.coordPopupEl || !this.coordPopupEl.classList || !this.coordPopupEl.classList.contains('show')) return;
@@ -398,7 +401,7 @@
   };
   OthelloApp.prototype.updatePauseButton = function(){ var aa = this.modeSel.value==='aa'; if (!this.pauseBtn) return; this.pauseBtn.style.display = aa ? '' : 'none'; this.pauseBtn.textContent = this.paused ? '继续' : '暂停'; };
   OthelloApp.prototype.getCellEl = function(r,c){ return this.boardEl.querySelector('.cell[data-row="' + r + '"][data-col="' + c + '"]'); };
-  OthelloApp.prototype.animateMove = function(move, flips){ const placeCell=this.getCellEl(move.row, move.col); if(placeCell){ const disc=placeCell.querySelector('.disc'); if(disc){ disc.classList.remove('place'); disc.style.animation='none'; requestAnimationFrame(()=>{ disc.style.removeProperty('animation'); disc.classList.add('place'); }); } } this.snd && this.snd.place(); if(flips && flips.length){ const entries = flips.map((f,idx)=>{ const cell=this.getCellEl(f[0], f[1]); if(!cell) return null; const disc=cell.querySelector('.disc'); if(!disc) return null; disc.style.setProperty('--flip-delay', (idx*80)+'ms'); return {disc, idx}; }).filter(Boolean); requestAnimationFrame(()=>{ entries.forEach(({disc})=>{ disc.classList.remove('colorflip'); disc.style.animation='none'; }); requestAnimationFrame(()=>{ entries.forEach(({disc})=>{ disc.style.removeProperty('animation'); disc.classList.add('colorflip'); }); var totalMs=Math.max(120, (entries.length-1)*80 + 140); this.snd && this.snd.flips(entries.length, totalMs/1000); }); }); } this.turnEl.classList.remove('thinking'); this.msgEl.classList.remove('thinking'); };
+  OthelloApp.prototype.animateMove = function(move, flips){ const placeCell=this.getCellEl(move.row, move.col); if(placeCell){ const disc=placeCell.querySelector('.disc'); if(disc){ disc.classList.remove('place'); disc.style.animation='none'; requestAnimationFrame(()=>{ disc.style.removeProperty('animation'); disc.classList.add('place'); }); } } this.snd && this.snd.place(); if(flips && flips.length){ const entries = flips.map((f,idx)=>{ const cell=this.getCellEl(f[0], f[1]); if(!cell) return null; const disc=cell.querySelector('.disc'); if(!disc) return null; disc.style.setProperty('--flip-delay', (idx*80)+'ms'); return {disc, idx}; }).filter(Boolean); requestAnimationFrame(()=>{ entries.forEach(({disc})=>{ disc.classList.remove('colorflip'); disc.style.animation='none'; }); requestAnimationFrame(()=>{ entries.forEach(({disc})=>{ disc.style.removeProperty('animation'); disc.classList.add('colorflip'); }); /* keep audio single: no flips sfx */ }); }); } this.turnEl.classList.remove('thinking'); this.msgEl.classList.remove('thinking'); };
 
   OthelloApp.prototype.render = function(){
     this.boardEl.innerHTML = '';
@@ -440,16 +443,123 @@
       this.turnEl.textContent = '对局结束：' + winner;
       this.msgEl.textContent = '结束总子数：' + (counts.black + counts.white);
       var go=document.getElementById('gameover'); if(go){
+        // 文案
         var t=go.querySelector('.go-title'); if(t) t.textContent='对局结束：' + winner;
         var s=go.querySelector('.go-sub'); if(s) s.textContent='黑 ' + counts.black + ' : ' + counts.white + ' 白 · 总子数 ' + (counts.black+counts.white);
-        var btn=document.getElementById('go-reset'); if(btn && !btn._bound){ btn._bound=true; btn.addEventListener('click', ()=>this.reset()); }
+
+        // 绑定按钮
+        var btnReset=document.getElementById('go-reset');
+        if(btnReset && !btnReset._bound){ btnReset._bound=true; btnReset.addEventListener('click', ()=>{ go.classList.remove('docked'); go.classList.remove('reveal'); this.reset(); }); }
+        var btnReview=document.getElementById('go-review');
+        if(btnReview && !btnReview._bound){ btnReview._bound=true; btnReview.addEventListener('click', ()=>{ this.toggleVictoryDock && this.toggleVictoryDock(); }); }
+
+        // 清理旧特效
+        var eff = go.querySelector('.go-effects'); if(eff) eff.innerHTML='';
+
+        // 胜/负特效
+        go.classList.remove('win','lose');
+        var mode = this.modeSel && this.modeSel.value; // 'hh','hb','bh','aa'
+        var humanColor = null; // 人类执子颜色
+        if (mode === 'hb') humanColor = BLACK; else if (mode === 'bh') humanColor = WHITE;
+        var winnerColor = (counts.black===counts.white) ? 0 : (counts.black>counts.white ? BLACK : WHITE);
+        if (humanColor !== null && winnerColor !== 0) {
+          if (winnerColor === humanColor) {
+            go.classList.add('win');
+            // 彩纸
+            if (eff) {
+              var wrap = document.createElement('div'); wrap.className='confetti';
+              var N = 28;
+              for (var i=0;i<N;i++){
+                var sp = document.createElement('span');
+                var x = Math.round(Math.random()*100);
+                var hue = Math.round(180 + Math.random()*160);
+                var delay = Math.round(Math.random()*400);
+                var dur = 1200 + Math.round(Math.random()*900);
+                var rot = (Math.round(Math.random()*360)) + 'deg';
+                var size = (6 + Math.round(Math.random()*8)) + 'px';
+                sp.style.setProperty('--x', x+'%');
+                sp.style.setProperty('--h', String(hue));
+                sp.style.setProperty('--delay', delay+'ms');
+                sp.style.setProperty('--dur', dur+'ms');
+                sp.style.setProperty('--rot', rot);
+                sp.style.setProperty('--size', size);
+                wrap.appendChild(sp);
+              }
+              eff.appendChild(wrap);
+            }
+          } else {
+            go.classList.add('lose');
+          }
+        }
+
+        // 初始回顾态复位
+        go.classList.remove('docked'); go.classList.remove('reveal');
+        if (btnReview) btnReview.textContent = '回顾棋局';
+
+        // 显示并重触发卡片弹入动画
         go.hidden=false;
+        var card = go.querySelector('.go-card');
+        if (card) {
+          card.style.animation='none';
+          // 强制回流再移除，重启 CSS 动画
+          void card.offsetWidth;
+          card.style.removeProperty('animation');
+        }
       }
-    } else { var go2=document.getElementById('gameover'); if(go2) go2.hidden=true; }
+    } else {
+      var go2=document.getElementById('gameover'); if(go2){ go2.hidden=true; go2.classList.remove('docked','reveal','win','lose'); }
+    }
   };
 
   OthelloApp.prototype.appendMoveToList = function(sideText, move){
     if (!this.moveListEl) return; var li=document.createElement('li'); li.textContent = sideText + '：' + coordsToLabel(move.row, move.col); this.moveListEl.appendChild(li); this.moveListEl.scrollTop=this.moveListEl.scrollHeight; window.requestFit && window.requestFit();
+  };
+
+  // Victory card dock/undock with FLIP
+  OthelloApp.prototype._dockVictory = function(){
+    var go = document.getElementById('gameover'); if(!go) return; var card = go.querySelector('.go-card'); if(!card) return;
+    var first = card.getBoundingClientRect();
+    go.classList.add('docked'); window.requestFit && window.requestFit();
+    var last = card.getBoundingClientRect();
+    var dx = first.left - last.left, dy = first.top - last.top;
+    var sx = first.width ? first.width/last.width : 1, sy = first.height ? first.height/last.height : 1;
+    card.style.willChange='transform'; card.style.transformOrigin='top center'; card.style.transition='none';
+    card.style.transform = 'translate('+dx+'px,'+dy+'px) scale('+sx+','+sy+')';
+    void card.offsetWidth;
+    requestAnimationFrame(()=>{
+      card.style.transition='transform 380ms cubic-bezier(0.22, 1, 0.36, 1)';
+      card.style.transform='none';
+      var clear=()=>{ card.style.transition=''; card.style.transform=''; card.style.willChange=''; card.removeEventListener('transitionend', clear); };
+      card.addEventListener('transitionend', clear);
+    });
+    if (!localStorage.getItem('go-dock-hint')) {
+      var hint = document.createElement('div'); hint.className='go-hint'; hint.textContent='将鼠标移到棋盘上方可展开胜利卡'; go.appendChild(hint);
+      setTimeout(()=>{ hint && hint.remove && hint.remove(); }, 2200);
+      localStorage.setItem('go-dock-hint','1');
+    }
+  };
+  OthelloApp.prototype._undockVictory = function(){
+    var go = document.getElementById('gameover'); if(!go) return; var card = go.querySelector('.go-card'); if(!card) return;
+    var first = card.getBoundingClientRect();
+    go.classList.remove('docked'); go.classList.remove('reveal'); window.requestFit && window.requestFit();
+    var last = card.getBoundingClientRect();
+    var dx = first.left - last.left, dy = first.top - last.top;
+    var sx = first.width ? first.width/last.width : 1, sy = first.height ? first.height/last.height : 1;
+    card.style.willChange='transform'; card.style.transformOrigin='top center'; card.style.transition='none';
+    card.style.transform = 'translate('+dx+'px,'+dy+'px) scale('+sx+','+sy+')';
+    void card.offsetWidth;
+    requestAnimationFrame(()=>{
+      card.style.transition='transform 380ms cubic-bezier(0.22, 1, 0.36, 1)';
+      card.style.transform='none';
+      var clear=()=>{ card.style.transition=''; card.style.transform=''; card.style.willChange=''; card.removeEventListener('transitionend', clear); };
+      card.addEventListener('transitionend', clear);
+    });
+  };
+  OthelloApp.prototype.toggleVictoryDock = function(){
+    var go = document.getElementById('gameover'); var btn = document.getElementById('go-review'); if(!go) return;
+    if (!go.classList.contains('docked')) { this._dockVictory(); if (btn) btn.textContent='展开胜利卡'; }
+    else { this._undockVictory(); if (btn) btn.textContent='回顾棋局'; }
+    window.requestFit && window.requestFit();
   };
 
   // Right-click coordinate popup helpers (file:// build)
@@ -491,9 +601,132 @@
   };
   OthelloApp.prototype.hideCoordPopup = function(){ if (this.coordPopupEl) this.coordPopupEl.classList.remove('show'); };
 
+  // ========= Ambient Background (bundle inline) =========
+  function __initBgFXBundle(){
+    try {
+      var root = document.querySelector('.decor-othello');
+      if (!root) return;
+      var mReduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+      if (mReduce && mReduce.matches) return;
+      var canvas = document.createElement('canvas');
+      canvas.className = 'bgfx';
+      canvas.setAttribute('aria-hidden','true');
+      root.insertBefore(canvas, root.firstChild);
+      var ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
+      if (!ctx) return;
+      var dpr = Math.min(2, window.devicePixelRatio||1);
+      var vw=0, vh=0; var running=true; var raf=0; var last=0;
+      var mqDark = window.matchMedia('(prefers-color-scheme: dark)');
+      function palette(){
+        var dark = mqDark && mqDark.matches;
+        return dark ? {
+          nodeRGB:'160,210,255', nodeAlpha:0.55,
+          linkRGB:'120,190,255', linkAlpha:0.65,
+          blobRGB:'90,170,255',  blobAlpha:0.10
+        } : {
+          nodeRGB:'40,70,110', nodeAlpha:0.45,
+          linkRGB:'60,110,170', linkAlpha:0.55,
+          blobRGB:'120,200,255', blobAlpha:0.10
+        };
+      }
+      var particles=[], blobs=[];
+      function clamp(a,b,c){ return Math.max(a, Math.min(b,c)); }
+      function seed(){
+        var area = vw*vh;
+        var target = clamp(36, Math.floor(area/28000), 110);
+        var speed = Math.max(0.02, Math.min(0.16, Math.sqrt(area)/14000));
+        particles = new Array(target).fill(0).map(function(){
+          return {
+            x: Math.random()*vw,
+            y: Math.random()*vh,
+            vx:(Math.random()*2-1)*speed*(0.6+Math.random()*0.8),
+            vy:(Math.random()*2-1)*speed*(0.6+Math.random()*0.8),
+            r: 1 + Math.random()*1.2
+          };
+        });
+        var minSide = Math.min(vw, vh);
+        var bCount = clamp(2, Math.floor(minSide/600), 4);
+        var br = clamp(60, Math.floor(minSide*0.18), 160);
+        var bs = Math.max(0.006, Math.min(0.045, minSide/30000));
+        blobs = new Array(bCount).fill(0).map(function(){
+          return {
+            x: Math.random()*vw,
+            y: Math.random()*vh,
+            r: br*(0.8+Math.random()*0.6),
+            vx:(Math.random()*2-1)*bs,
+            vy:(Math.random()*2-1)*bs
+          };
+        });
+      }
+      function resize(){
+        dpr = Math.min(2, window.devicePixelRatio||1);
+        var rect = root.getBoundingClientRect();
+        vw = Math.max(1, (rect.width|0));
+        vh = Math.max(1, (rect.height|0));
+        canvas.width = Math.floor(vw*dpr);
+        canvas.height = Math.floor(vh*dpr);
+        canvas.style.width = vw+'px';
+        canvas.style.height = vh+'px';
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        seed();
+      }
+      function step(dt){
+        var maxX=vw, maxY=vh;
+        for (var i=0;i<particles.length;i++){
+          var p=particles[i]; p.x+=p.vx*dt; p.y+=p.vy*dt;
+          if(p.x<-20)p.x=maxX+20; else if(p.x>maxX+20)p.x=-20;
+          if(p.y<-20)p.y=maxY+20; else if(p.y>maxY+20)p.y=-20;
+        }
+        for (var j=0;j<blobs.length;j++){
+          var b=blobs[j]; b.x+=b.vx*dt; b.y+=b.vy*dt;
+          if (b.x < -b.r) { b.x = -b.x; b.vx *= -1; }
+          if (b.y < -b.r) { b.y = -b.y; b.vy *= -1; }
+          if (b.x > maxX + b.r) { b.x = maxX - (b.x - maxX); b.vx *= -1; }
+          if (b.y > maxY + b.r) { b.y = maxY - (b.y - maxY); b.vy *= -1; }
+        }
+      }
+      function draw(){
+        var pal = palette();
+        ctx.clearRect(0,0,vw,vh);
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        for (var i=0;i<blobs.length;i++){
+          var b=blobs[i];
+          var g = ctx.createRadialGradient(b.x,b.y,b.r*0.2,b.x,b.y,b.r);
+          g.addColorStop(0, 'rgba('+pal.blobRGB+', '+pal.blobAlpha+')');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle=g; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+        var maxD = Math.min(180, Math.max(90, Math.min(vw,vh)*0.22));
+        ctx.lineWidth = Math.max(0.4, 0.8/dpr);
+        for (var a=0;a<particles.length;a++){
+          var pa=particles[a];
+          for (var b2=a+1;b2<particles.length;b2++){
+            var pb=particles[b2];
+            var dx=pa.x-pb.x, dy=pa.y-pb.y; var d2=dx*dx+dy*dy; if(d2>maxD*maxD) continue; var d=Math.sqrt(d2); var al=1-d/maxD;
+            ctx.save(); ctx.strokeStyle='rgb('+pal.linkRGB+')'; ctx.globalAlpha = pal.linkAlpha*(0.25+al*0.55); ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke(); ctx.restore();
+          }
+        }
+        ctx.fillStyle = 'rgba('+pal.nodeRGB+', '+pal.nodeAlpha+')';
+        for (var k=0;k<particles.length;k++){
+          var p=particles[k]; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+        }
+      }
+      function loop(ts){
+        if(!running) return; if(!last) last=ts; var dtm=ts-last; if(dtm<32){ raf=requestAnimationFrame(loop); return; }
+        var dt = Math.min(66, dtm)*0.13; step(dt); draw(); last=ts; raf=requestAnimationFrame(loop);
+      }
+      function onVis(){ if(document.hidden){ running=false; if(raf) cancelAnimationFrame(raf); raf=0; last=0; } else { running=true; raf=requestAnimationFrame(loop); } }
+      resize(); raf=requestAnimationFrame(loop);
+      window.addEventListener('resize', resize);
+      document.addEventListener('visibilitychange', onVis);
+      if (mqDark && mqDark.addEventListener) mqDark.addEventListener('change', function(){});
+    } catch(_){}
+  }
+
   // ========= Bootstrap =========
   (function(){
-    function boot(){ if (window.__OTHELLO_BOOTSTRAPPED__) return; window.__OTHELLO_BOOTSTRAPPED__=true; try { new OthelloApp(); } catch(e){ console.error(e); } }
+    function boot(){ if (window.__OTHELLO_BOOTSTRAPPED__) return; window.__OTHELLO_BOOTSTRAPPED__=true; try { new OthelloApp(); __initBgFXBundle(); } catch(e){ console.error(e); } }
     if (document.readyState === 'loading') {
       window.addEventListener('DOMContentLoaded', boot);
     } else {

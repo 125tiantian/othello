@@ -18,6 +18,9 @@ export class OthelloApp {
     this.resetBtn = document.getElementById('reset');
     this.pauseBtn = document.getElementById('pause');
     this.focusBtn = document.getElementById('focus');
+    this.settingsBtn = document.getElementById('settings');
+    this.scrimEl = document.getElementById('overlay-scrim');
+    this.closeSettingsBtn = document.getElementById('close-settings');
     this.themeBtn = document.getElementById('theme');
 
     this.ai = new AIEngine();
@@ -32,6 +35,8 @@ export class OthelloApp {
     // 手机长按坐标弹出状态
     this._lp = { timer: 0, x: 0, y: 0, cell: null, fired: false };
     this._suppressClickUntil = 0;
+    // AI 搜索令牌：用于在悔棋/模式切换等情况下取消旧的 AI 结果提交
+    this._aiToken = 0;
 
     this.board = createInitialBoard();
     this.currentPlayer = BLACK; // black starts
@@ -51,6 +56,9 @@ export class OthelloApp {
       appEl.classList.add('focus-mode');
       if (this.focusBtn) this.focusBtn.textContent = '退出专注';
     }
+
+    // 初始化移动端设置按钮显示逻辑（CSS 已控制显示/隐藏，这里仅保证可用）
+    this.setupMobileSettings();
   }
 
   bind() {
@@ -138,6 +146,16 @@ export class OthelloApp {
     // 专注对局按钮/快捷键
     if (this.focusBtn) {
       this.focusBtn.addEventListener('click', () => this.toggleFocusMode());
+    }
+    // 设置按钮：打开移动端抽屉
+    if (this.settingsBtn) {
+      this.settingsBtn.addEventListener('click', () => this.openSettings());
+    }
+    if (this.scrimEl) {
+      this.scrimEl.addEventListener('click', () => this.closeSettings());
+    }
+    if (this.closeSettingsBtn) {
+      this.closeSettingsBtn.addEventListener('click', () => this.closeSettings());
     }
     // 主题切换
     if (this.themeBtn) {
@@ -339,15 +357,52 @@ export class OthelloApp {
 
   undo() {
     if (this.history.length === 0) return;
-    const prev = this.history.pop();
-    this.board = prev.board;
-    this.currentPlayer = prev.player;
-    this.lastMove = prev.lastMove ?? null;
+
+    // 取消任何未完成的 AI 思考提交
+    this._aiToken++;
+    this.turnEl.classList.remove('thinking');
+    this.msgEl.classList.remove('thinking');
+
+    const mode = this.modeSel.value;
+    const humanColor = (mode === 'hb') ? BLACK : (mode === 'bh') ? WHITE : null;
+
+    if (humanColor == null) {
+      // 人 vs 人 或 AI vs AI：维持原单步悔棋
+      const prev = this.history.pop();
+      this.board = prev.board;
+      this.currentPlayer = prev.player;
+      this.lastMove = prev.lastMove ?? null;
+      this.render();
+      if (this.moveListEl && this.moveListEl.lastElementChild) {
+        this.moveListEl.removeChild(this.moveListEl.lastElementChild);
+      }
+      if (window.requestFit) window.requestFit();
+      return;
+    }
+
+    // 人机模式：一直撤到“人类上一步之前”的局面
+    // pushHistory() 在每次落子前入栈，元素 prev.player == 当手落子方
+    // 因此我们循环弹出：若最后一步是 AI，则先撤 AI；直到撤到一次“人类落子”为止
+    while (this.history.length > 0) {
+      const prev = this.history.pop();
+      const mover = prev.player; // 刚被撤销的那步是谁下的
+
+      this.board = prev.board;
+      this.currentPlayer = prev.player;
+      this.lastMove = prev.lastMove ?? null;
+
+      if (mover === humanColor) {
+        // 棋谱列表仅记录人类步，撤到人类步时移除一行
+        if (this.moveListEl && this.moveListEl.lastElementChild) {
+          this.moveListEl.removeChild(this.moveListEl.lastElementChild);
+        }
+        break; // 到达“人类上一步之前”的局面
+      }
+      // mover 为 AI，继续再撤一手
+    }
+
     this.render();
     if (window.requestFit) window.requestFit();
-    if (this.moveListEl && this.moveListEl.lastElementChild) {
-      this.moveListEl.removeChild(this.moveListEl.lastElementChild);
-    }
   }
 
   isAIPlaying(color) {
@@ -370,6 +425,7 @@ export class OthelloApp {
   }
 
   onCellClick(ev) {
+    if (isGameOver(this.board)) return; // 禁止在对局结束后继续落子（回顾模式下允许看盘不落子）
     if (this._suppressClickUntil && Date.now() < this._suppressClickUntil) {
       ev.preventDefault && ev.preventDefault();
       return;
@@ -440,8 +496,11 @@ export class OthelloApp {
     // compute on next tick to allow UI to update
     setTimeout(() => {
       if (this.modeSel.value === 'aa' && this.paused) { this.turnEl.classList.remove('thinking'); this.msgEl.classList.remove('thinking'); return; }
+      // 记录此轮思考令牌；若之后令牌变化（悔棋/模式切换等），则丢弃结果
+      const token = ++this._aiToken;
       Promise.resolve(this.ai.chooseMove(this.board, me, opts))
         .then(move => {
+          if (this._aiToken !== token) return; // 结果已过期
           if (!move) {
             // 无路可走
             this.currentPlayer *= -1;
@@ -449,6 +508,7 @@ export class OthelloApp {
             setTimeout(() => this.maybeTriggerAI(), 10);
             return;
           }
+          if (this._aiToken !== token) return; // 结果已过期
           if (this.modeSel.value === 'aa' && this.paused) { this.turnEl.classList.remove('thinking'); this.msgEl.classList.remove('thinking'); return; }
           // 直接落子（不做预高亮，避免闪烁）
           const flips = getFlips(this.board, move.row, move.col, me);
@@ -488,10 +548,20 @@ export class OthelloApp {
         requestAnimationFrame(() => {
           disc.style.removeProperty('animation');
           disc.classList.add('place');
-        });
-      }
+    });
+
+    // 回顾模式（dock）下：悬停棋盘展开胜利卡
+    this.boardEl.addEventListener('mouseenter', () => {
+      const go = document.getElementById('gameover');
+      if (go && go.classList.contains('docked')) go.classList.add('reveal');
+    });
+    this.boardEl.addEventListener('mouseleave', () => {
+      const go = document.getElementById('gameover');
+      if (go && go.classList.contains('docked')) go.classList.remove('reveal');
+    });
+  }
     }
-    // sound for placing
+    // 始终播放统一的“木板落子”音效
     this.snd && this.snd.place();
     // stagger flip animations for affected discs with CSS delays (fewer timers)
     if (flips && flips.length) {
@@ -514,9 +584,7 @@ export class OthelloApp {
             disc.style.removeProperty('animation');
             disc.classList.add('colorflip');
           });
-          // 新音效：合并为一条柔和的“刷”声，避免嘈杂
-          const totalMs = Math.max(120, (entries.length - 1) * 70 + 140);
-          this.snd && this.snd.flips(entries.length, totalMs / 1000);
+          // 不再叠加“刷”声，保持单一木板声
         });
       });
     }
@@ -537,8 +605,9 @@ export class OthelloApp {
     if (!app || !wrap) return;
     // FLIP：先测量，再切换，再从差值过渡
     const first = wrap.getBoundingClientRect();
+    // 暂停自适应，避免动画进行中多次测量导致尺寸抖动
+    window.__suppressFit = true;
     app.classList.toggle('focus-mode');
-    if (window.requestFit) window.requestFit();
     const last = wrap.getBoundingClientRect();
     const dx = first.left - last.left;
     const dy = first.top - last.top;
@@ -558,11 +627,119 @@ export class OthelloApp {
         wrap.style.transform = '';
         wrap.style.willChange = '';
         wrap.removeEventListener('transitionend', clear);
+        // 动画结束后恢复自适应并重新计算
+        window.__suppressFit = false;
+        if (window.requestFit) window.requestFit();
       };
       wrap.addEventListener('transitionend', clear);
     });
     if (this.focusBtn) this.focusBtn.textContent = app.classList.contains('focus-mode') ? '退出专注' : '专注对局';
     localStorage.setItem('focus-mode', app.classList.contains('focus-mode') ? '1' : '0');
+  }
+
+  // —— 胜利卡 Dock/Undock ——
+  _dockVictory(go) {
+    const card = go && go.querySelector('.go-card');
+    if (!go || !card) return;
+    const first = card.getBoundingClientRect();
+    go.classList.add('docked');
+    if (window.requestFit) window.requestFit();
+    const last = card.getBoundingClientRect();
+    const dx = first.left - last.left;
+    const dy = first.top - last.top;
+    const sx = first.width ? first.width / last.width : 1;
+    const sy = first.height ? first.height / last.height : 1;
+    card.style.willChange = 'transform';
+    card.style.transformOrigin = 'top center';
+    card.style.transition = 'none';
+    card.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+    void card.offsetWidth;
+    requestAnimationFrame(() => {
+      card.style.transition = 'transform 380ms cubic-bezier(0.22, 1, 0.36, 1)';
+      card.style.transform = 'none';
+      const clear = () => {
+        card.style.transition = '';
+        card.style.transform = '';
+        card.style.willChange = '';
+        card.removeEventListener('transitionend', clear);
+      };
+      card.addEventListener('transitionend', clear);
+    });
+    // 小提示：仅显示一次
+    if (!localStorage.getItem('go-dock-hint')) {
+      const hint = document.createElement('div');
+      hint.className = 'go-hint';
+      hint.textContent = '将鼠标移到棋盘上方可展开胜利卡';
+      go.appendChild(hint);
+      setTimeout(() => { hint.remove(); }, 2200);
+      localStorage.setItem('go-dock-hint', '1');
+    }
+  }
+  _undockVictory(go) {
+    const card = go && go.querySelector('.go-card');
+    if (!go || !card) return;
+    // FLIP 回来
+    const first = card.getBoundingClientRect();
+    go.classList.remove('docked');
+    go.classList.remove('reveal');
+    if (window.requestFit) window.requestFit();
+    const last = card.getBoundingClientRect();
+    const dx = first.left - last.left;
+    const dy = first.top - last.top;
+    const sx = first.width ? first.width / last.width : 1;
+    const sy = first.height ? first.height / last.height : 1;
+    card.style.willChange = 'transform';
+    card.style.transformOrigin = 'top center';
+    card.style.transition = 'none';
+    card.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+    void card.offsetWidth;
+    requestAnimationFrame(() => {
+      card.style.transition = 'transform 380ms cubic-bezier(0.22, 1, 0.36, 1)';
+      card.style.transform = 'none';
+      const clear = () => {
+        card.style.transition = '';
+        card.style.transform = '';
+        card.style.willChange = '';
+        card.removeEventListener('transitionend', clear);
+      };
+      card.addEventListener('transitionend', clear);
+    });
+  }
+  toggleVictoryDock() {
+    const go = document.getElementById('gameover');
+    const btn = document.getElementById('go-review');
+    if (!go) return;
+    if (!go.classList.contains('docked')) {
+      this._dockVictory(go);
+      if (btn) btn.textContent = '展开胜利卡';
+    } else {
+      this._undockVictory(go);
+      if (btn) btn.textContent = '回顾棋局';
+    }
+    if (window.requestFit) window.requestFit();
+  }
+
+  setupMobileSettings() {
+    // 小屏用抽屉呈现设置，初始关闭
+    this.closeSettings();
+    // 视口变化时自动关闭，避免布局切换卡住
+    window.addEventListener('resize', () => this.closeSettings());
+  }
+
+  openSettings() {
+    const app = document.querySelector('.app');
+    if (!app) return;
+    app.classList.add('settings-open');
+    if (this.scrimEl) this.scrimEl.hidden = false;
+    if (window.requestFit) window.requestFit();
+  }
+
+  closeSettings() {
+    const app = document.querySelector('.app');
+    if (!app) return;
+    app.classList.remove('settings-open');
+    if (this.scrimEl) this.scrimEl.hidden = true;
+    if (window.requestFit) window.requestFit();
   }
 
   render() {
@@ -606,49 +783,101 @@ export class OthelloApp {
     const playerText = this.currentPlayer === BLACK ? '黑棋' : '白棋';
     if (this.turnEl) this.turnEl.textContent = `当前轮到：${playerText}`;
     if (this.scoreEl) this.scoreEl.textContent = `黑棋 ${counts.black} : ${counts.white} 白棋`;
-    const sbEl = document.getElementById('score-black');
-    const swEl = document.getElementById('score-white');
-    if (sbEl) sbEl.textContent = String(counts.black);
-    if (swEl) swEl.textContent = String(counts.white);
+    // 同步侧栏与移动端顶部计分板
+    const sbIds = ['score-black', 'm-score-black'];
+    const swIds = ['score-white', 'm-score-white'];
+    for (const id of sbIds) { const el = document.getElementById(id); if (el) el.textContent = String(counts.black); }
+    for (const id of swIds) { const el = document.getElementById(id); if (el) el.textContent = String(counts.white); }
     const total = counts.black + counts.white;
     const blackPct = total ? Math.round((counts.black / total) * 100) : 50;
     const whitePct = 100 - blackPct;
-    const sb = document.getElementById('scorebar');
-    if (sb) {
+    const sBars = ['scorebar', 'm-scorebar'].map(id => document.getElementById(id)).filter(Boolean);
+    for (const sb of sBars) {
       const b = sb.querySelector('.black');
       const w = sb.querySelector('.white');
-      if (b && w) {
-        b.style.flexBasis = `${blackPct}%`;
-        w.style.flexBasis = `${whitePct}%`;
-      }
-      // pulse when score changes
+      if (b && w) { b.style.flexBasis = `${blackPct}%`; w.style.flexBasis = `${whitePct}%`; }
       if (!this.prevCounts || this.prevCounts.black !== counts.black || this.prevCounts.white !== counts.white) {
-        sb.classList.remove('pulse');
-        // force reflow to restart animation
-        void sb.offsetWidth;
-        sb.classList.add('pulse');
-        setTimeout(() => sb.classList.remove('pulse'), 460);
+        sb.classList.remove('pulse'); void sb.offsetWidth; sb.classList.add('pulse'); setTimeout(() => sb.classList.remove('pulse'), 460);
       }
     }
+    // 同步当前轮到/消息到移动端面板
+    const mTurn = document.getElementById('m-turn'); if (mTurn) mTurn.textContent = `当前轮到：${playerText}`;
+    const mMsg = document.getElementById('m-msg'); if (mMsg) mMsg.textContent = this.msgEl ? this.msgEl.textContent : '';
     this.prevCounts = counts;
 
     // end game
     if (isGameOver(this.board)) {
-      const winner = counts.black === counts.white ? '平局' : counts.black > counts.white ? '黑棋胜' : '白棋胜';
-      this.turnEl.textContent = `对局结束：${winner}`;
+      const winText = counts.black === counts.white ? '平局' : counts.black > counts.white ? '黑棋胜' : '白棋胜';
+      this.turnEl.textContent = `对局结束：${winText}`;
       const total = counts.black + counts.white;
       this.msgEl.textContent = `结束总子数：${total}`;
       const go = document.getElementById('gameover');
       if (go) {
-        go.querySelector('.go-title').textContent = `对局结束：${winner}`;
+        // 结果文案
+        go.querySelector('.go-title').textContent = `对局结束：${winText}`;
         go.querySelector('.go-sub').textContent = `黑 ${counts.black} : ${counts.white} 白 · 总子数 ${total}`;
-        const btn = document.getElementById('go-reset');
-        if (btn && !btn._bound) { btn._bound = true; btn.addEventListener('click', ()=>this.reset()); }
+        // 绑定按钮
+        const btnReset = document.getElementById('go-reset');
+        if (btnReset && !btnReset._bound) { btnReset._bound = true; btnReset.addEventListener('click', ()=>{ go.classList.remove('peek'); this.reset(); }); }
+        const btnReview = document.getElementById('go-review');
+        if (btnReview && !btnReview._bound) {
+          btnReview._bound = true;
+          btnReview.addEventListener('click', () => this.toggleVictoryDock());
+        }
+
+        // 清理上一局效果元素
+        const eff = go.querySelector('.go-effects');
+        if (eff) eff.innerHTML = '';
+
+        // 人机对战：胜利/失败特效
+        go.classList.remove('win','lose');
+        const mode = this.modeSel.value; // hb:人黑, bh:人白
+        let humanColor = null;
+        if (mode === 'hb') humanColor = BLACK;
+        else if (mode === 'bh') humanColor = WHITE;
+        const winnerColor = (counts.black === counts.white) ? 0 : (counts.black > counts.white ? BLACK : WHITE);
+        if (humanColor !== null && winnerColor !== 0) {
+          if (winnerColor === humanColor) {
+            go.classList.add('win');
+            // 生成少量彩纸
+            if (eff) {
+              const wrap = document.createElement('div');
+              wrap.className = 'confetti';
+              const N = 28;
+              for (let i=0; i<N; i++) {
+                const s = document.createElement('span');
+                const x = Math.round(Math.random()*100);
+                const hue = Math.round(180 + Math.random()*160);
+                const delay = Math.round(Math.random()*400);
+                const dur = 1200 + Math.round(Math.random()*900);
+                const rot = Math.round(Math.random()*360) + 'deg';
+                const size = (6 + Math.round(Math.random()*8)) + 'px';
+                s.style.setProperty('--x', x+'%');
+                s.style.setProperty('--h', String(hue));
+                s.style.setProperty('--delay', delay+'ms');
+                s.style.setProperty('--dur', dur+'ms');
+                s.style.setProperty('--rot', rot);
+                s.style.setProperty('--size', size);
+                wrap.appendChild(s);
+              }
+              eff.appendChild(wrap);
+            }
+          } else {
+            go.classList.add('lose');
+          }
+        }
+
+        // 初始为非回顾态
+        go.classList.remove('docked','reveal');
+        if (btnReview) btnReview.textContent = '回顾棋局';
         go.hidden = false;
       }
     } else {
       const go = document.getElementById('gameover');
-      if (go) go.hidden = true;
+      if (go) {
+        go.hidden = true;
+        go.classList.remove('docked','reveal','win','lose');
+      }
     }
 
     if (window.requestFit) window.requestFit();

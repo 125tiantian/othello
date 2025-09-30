@@ -9,6 +9,8 @@ export class AIEngine {
     this.tasks = new Map();
     this.shared = null; // { size, keys, scores, depths, flags }
     this.fallbackEngine = null; // single-thread fallback when Worker not available
+    // track whether threads are auto-managed or user-fixed
+    this._autoThreading = true;
   }
 
   ensureWorkers() {
@@ -67,8 +69,10 @@ export class AIEngine {
   setThreads(n) {
     if (typeof n === 'number' && n > 0) {
       this.poolSize = Math.max(1, Math.min(32, Math.floor(n)));
+      this._autoThreading = false;
     } else {
       this.poolSize = Math.min(navigator.hardwareConcurrency || 4, 8);
+      this._autoThreading = true;
     }
     // Recreate shared TT to match new pool if needed
     this.prepareSharedTT();
@@ -129,7 +133,9 @@ export class AIEngine {
       return res.move;
     }
 
-    this.poolSize = Math.min(Math.max(2, Math.floor((navigator.hardwareConcurrency || 4) * 0.75)), 8);
+    if (this._autoThreading) {
+      this.poolSize = Math.min(Math.max(2, Math.floor((navigator.hardwareConcurrency || 4) * 0.75)), 8);
+    }
     this.ensureWorkers();
 
     // Schedule root moves across the pool; each task uses the full remaining time
@@ -169,47 +175,10 @@ export class AIEngine {
         const v = flips.filter(f => f[1] === m.col).length; // vertical flips
         const h = flips.filter(f => f[0] === m.row).length; // horizontal flips
         const d = flips.length - v - h; // diagonal
-
-        // After-move board
-        const after = state.map(row => row.slice());
-        after[m.row][m.col] = player;
-        for (const [r,c] of flips) after[r][c] = player;
-
-        // Opponent immediate replies
-        const opp = -player;
-        const beforeOppMoves = getLegalMoves(state, opp);
-        const afterOppMoves = getLegalMoves(after, opp);
-        // Newly enabled corners for opponent
-        const isCorner = (r,c)=> (r===0||r===7)&&(c===0||c===7);
-        const beforeCorners = beforeOppMoves.filter(x=>isCorner(x.row,x.col)).length;
-        const afterCorners = afterOppMoves.filter(x=>isCorner(x.row,x.col)).length;
-        const cornerNew = Math.max(0, afterCorners - beforeCorners);
-
-        // Union of opponent 1-ply flips from the after-board
-        const oppUnion = new Set();
-        for (const om of afterOppMoves) {
-          const ofl = getFlips(after, om.row, om.col, opp);
-          for (const f of ofl) oppUnion.add(f[0]*8+f[1]);
-        }
-        // Our HV flips that cannot be flipped back immediately
-        const hv = flips.filter(f => (f[0]===m.row) || (f[1]===m.col));
-        let safeHV = 0;
-        for (const f of hv) { if (!oppUnion.has(f[0]*8+f[1])) safeHV++; }
-
-        // edge preference and near-complete line
         const isEdge = (m.row === 0 || m.row === 7 || m.col === 0 || m.col === 7) ? 1 : 0;
-        const rowCount = after[m.row].filter(x=>x===player).length;
-        let colCount = 0; for (let rr=0; rr<8; rr++) if (after[rr][m.col]===player) colCount++;
-        const nearFullRow = (rowCount===7) ? 1 : 0;
-        const nearFullCol = (colCount===7) ? 1 : 0;
-        const fullRow = (rowCount===8) ? 1 : 0;
-        const fullCol = (colCount===8) ? 1 : 0;
-
-        // Compose ordering score (heuristic only)
+        // Lightweight ordering only
         const score = (
-          v*11 + h*9 + d*2 + flips.length*3 +
-          safeHV*14 + isEdge*30 + nearFullRow*48 + nearFullCol*70 +
-          fullRow*260 + fullCol*380 - cornerNew*60
+          v*12 + h*10 + d*2 + flips.length*3 + isEdge*24
         );
         return { m, s: score };
       })

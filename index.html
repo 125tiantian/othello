@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>黑白棋：极智对决</title>
   <link rel="stylesheet" href="assets/styles.css" />
-  <link rel="manifest" href="assets/manifest.webmanifest" />
+  <link rel="manifest" href="assets/manifest.webmanifest?v=3" />
   <meta name="theme-color" content="#23b4ff" />
   <link rel="icon" href="assets/icons/icon-192.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/icons/icon-192.svg" />
@@ -14,19 +14,23 @@
   </head>
   <body>
   <div class="fit-root">
-  <!-- 装饰性漂浮气泡，不影响交互 -->
-  <div class="decor-bubbles" aria-hidden="true">
-    <span style="--x: 8%; --size: 12px; --delay: .0s; --dur: 16s"></span>
-    <span style="--x: 18%; --size: 8px; --delay: .8s; --dur: 12s"></span>
-    <span style="--x: 28%; --size: 16px; --delay: 1.5s; --dur: 18s"></span>
-    <span style="--x: 38%; --size: 10px; --delay: .4s; --dur: 14s"></span>
-    <span style="--x: 50%; --size: 14px; --delay: 1.2s; --dur: 17s"></span>
-    <span style="--x: 62%; --size: 9px;  --delay: .3s; --dur: 13s"></span>
-    <span style="--x: 72%; --size: 12px; --delay: 2.0s; --dur: 16s"></span>
-    <span style="--x: 82%; --size: 7px;  --delay: 1.7s; --dur: 12s"></span>
-    <span style="--x: 90%; --size: 15px; --delay: .9s; --dur: 15s"></span>
-    <span style="--x: 25%; --size: 6px;  --delay: 2.6s; --dur: 13s"></span>
+  <!-- 新：黑白棋主题背景饰件（轻量，不影响交互） -->
+  <div class="decor-othello" aria-hidden="true">
+    <!-- Corner orbs (avoid board center occlusion) -->
+    <div class="orb ring"  style="--x: 9%;  --y: 14%; --s: 150; --rot: 8deg;   --delay: 0"></div>
+    <div class="orb split" style="--x: 86%; --y: 16%; --s: 132; --rot: 12deg;  --delay: 1.2"></div>
+    <div class="orb ring"  style="--x: 18%; --y: 86%; --s: 110; --rot: -10deg; --delay: 0.6"></div>
+    <div class="orb solid" style="--x: 90%; --y: 82%; --s: 100; --rot: 0deg;   --delay: 1.8"></div>
+    <div class="orb split" style="--x: 50%; --y: 92%; --s: 92;  --rot: -12deg; --delay: 2.2"></div>
+    <!-- Edge rails: soft moving glows along top/right edges -->
+    <div class="rail" style="--w: 64vw; --h: 20vh; --x: 12vw; --y: -4vh; --rot: 0deg;   --delay: 0"></div>
+    <div class="rail" style="--w: 60vh; --h: 18vh; --x: calc(100vw - 10vh); --y: 20vh; --rot: 90deg; --delay: 1.5"></div>
+    <!-- Large arcs partially offscreen for dynamic framing -->
+    <div class="arc"  style="--x: -6%;  --y: 8%;  --s: 720; --a: -10deg; --rot: 0deg"></div>
+    <div class="arc"  style="--x: 104%; --y: 92%; --s: 680; --a: 140deg; --rot: 0deg"></div>
   </div>
+  <!-- 保留旧气泡标记（已在 CSS 隐藏），以便回退或对比 -->
+  <div class="decor-bubbles" aria-hidden="true"></div>
   <div class="app">
     <header class="top-bar">
       <div class="brand">
@@ -38,11 +42,31 @@
         <div style="flex:1"></div>
         <button id="install" class="ghost sm" style="display:none" title="安装为应用">安装应用</button>
         <button id="theme" class="ghost sm" title="切换棋盘主题">浅色木纹</button>
+        <button id="settings" class="ghost sm" title="打开设置" style="display:none">设置</button>
         <button id="focus" class="ghost sm" title="切换专注对局(F)">专注对局</button>
       </div>
     </header>
 
     <main class="arena">
+      <!-- 移动端：顶部计分板（在小屏上显示，置于棋盘上方） -->
+      <div class="panel score-panel mobile-score" id="mobile-score" aria-label="对局信息(移动端)">
+        <div class="scores">
+          <div class="score black">
+            <span class="label">黑</span>
+            <span id="m-score-black" class="value">2</span>
+          </div>
+          <div class="score white">
+            <span class="label">白</span>
+            <span id="m-score-white" class="value">2</span>
+          </div>
+        </div>
+        <div class="progress" id="m-scorebar" aria-label="子力比例">
+          <span class="black"></span>
+          <span class="white"></span>
+        </div>
+        <div class="turn" id="m-turn">当前轮到：黑棋</div>
+        <div class="msg" id="m-msg"></div>
+      </div>
       <div class="board-wrap">
         <div id="board" aria-label="棋盘" class="show-coords"></div>
         <div class="board-shadow"></div>
@@ -50,11 +74,21 @@
           <div class="go-card">
             <div class="go-title"></div>
             <div class="go-sub"></div>
-            <button id="go-reset" class="primary">再来一局</button>
+            <div class="go-actions">
+              <button id="go-review" class="ghost">回顾棋局</button>
+              <button id="go-reset" class="primary">再来一局</button>
+            </div>
           </div>
+          <div class="go-effects" aria-hidden="true"></div>
         </div>
       </div>
+      <!-- 叠加层遮罩（移动端设置抽屉） -->
+      <div id="overlay-scrim" class="overlay-scrim" hidden></div>
       <aside class="sidebar" aria-label="对局信息">
+        <div class="mobile-settings-header" id="mobile-settings-header" aria-hidden="true">
+          <div class="msh-title">设置</div>
+          <button id="close-settings" class="ghost sm" title="关闭设置">关闭</button>
+        </div>
         <div class="status-panels">
           <div class="panel score-panel">
             <div class="scores">
@@ -148,17 +182,30 @@
   </div>
   </div>
 
-  <!-- 智能加载器：HTTP(S) 下加载模块源码；file:// 下回退到打包版 -->
+  <!-- 智能加载器：HTTP(S) 优先加载模块源码；失败或未启动则回退到打包版 -->
   <script>
     (function(){
-      var s = document.createElement('script');
-      if (location.protocol !== 'file:') {
-        s.type = 'module';
-        s.src = 'src/main.js';
-      } else {
-        s.src = 'dist/app.js';
+      var anchor = document.currentScript; // 保留引用，异步时 document.currentScript 可能为 null
+      function inject(src, type){
+        var el = document.createElement('script');
+        if (type) el.type = type;
+        el.src = src;
+        if (anchor && anchor.parentNode) {
+          anchor.parentNode.insertBefore(el, anchor.nextSibling);
+        } else {
+          (document.body || document.head || document.documentElement).appendChild(el);
+        }
+        return el;
       }
-      document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
+      function loadDist(){
+        if (window.__OTHELLO_BOOTSTRAPPED__) return;
+        inject('dist/app.js');
+      }
+      if (location.protocol === 'file:') { loadDist(); return; }
+      var s = inject('src/main.js', 'module');
+      s.onerror = loadDist;
+      // 如果模块加载后仍未启动（某些服务器不支持 ESM import），则延迟回退
+      setTimeout(function(){ if (!window.__OTHELLO_BOOTSTRAPPED__) loadDist(); }, 1200);
     })();
   </script>
   <!-- 内联一屏自适配脚本：在 file:// 模式下也启用新版排版，无需服务器 -->
@@ -306,7 +353,8 @@
         const first = wrap.getBoundingClientRect();
         doToggle();
         // 可能伴随 reflow（尤其 file 模式下 requestFit 生效）
-        if (window.requestFit) window.requestFit();
+        // 动画期间暂停自适配，避免抖动
+        window.__suppressFit = true;
         const last = wrap.getBoundingClientRect();
         const dx = first.left - last.left;
         const dy = first.top - last.top;
@@ -327,6 +375,9 @@
             wrap.style.transform = '';
             wrap.style.willChange = '';
             wrap.removeEventListener('transitionend', clear);
+            // 恢复自适配
+            window.__suppressFit = false;
+            if (window.requestFit) window.requestFit();
           };
           wrap.addEventListener('transitionend', clear);
         });
@@ -416,6 +467,18 @@
           { value: '8', label: '8' },
           { value: 'max', label: '全部' },
         ]);
+        // 移动端：设置抽屉（file 模式）
+        const settingsBtn = document.getElementById('settings');
+        const scrim = document.getElementById('overlay-scrim');
+        const closeBtn = document.getElementById('close-settings');
+        const app = document.querySelector('.app');
+        function openSettings(){ if (!app) return; app.classList.add('settings-open'); if (scrim) scrim.hidden = false; if (window.requestFit) window.requestFit(); }
+        function closeSettings(){ if (!app) return; app.classList.remove('settings-open'); if (scrim) scrim.hidden = true; if (window.requestFit) window.requestFit(); }
+        if (settingsBtn) settingsBtn.addEventListener('click', openSettings);
+        if (scrim) scrim.addEventListener('click', closeSettings);
+        if (closeBtn) closeBtn.addEventListener('click', closeSettings);
+        window.addEventListener('resize', closeSettings);
+        // 背景动效在 file 模式由 dist/app.js 启动（bundle 内置），无需此处重复。
       }
       if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', start); else start();
     })();

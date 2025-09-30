@@ -1,4 +1,5 @@
 import { OthelloApp } from './ui.js';
+import { initBgFX } from './bgfx.js';
 
 // Fit engine: tune --cell-size to fit viewport; fall back to scaling
 function fitLayout() {
@@ -63,12 +64,15 @@ window.addEventListener('DOMContentLoaded', () => {
   if (window.__OTHELLO_BOOTSTRAPPED__) return;
   window.__OTHELLO_BOOTSTRAPPED__ = true;
   new OthelloApp();
+  // Ambient background FX
+  try { initBgFX(); } catch (_) {}
   // Expose a debounced requestFit for UI updates
   let raf = 0;
   window.requestFit = () => {
+    if (window.__suppressFit) return; // 动画期间暂缓测量
     if (raf) cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
-      fitLayout();
+      if (!window.__suppressFit) fitLayout();
       raf = 0;
     });
   };

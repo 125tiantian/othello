@@ -30,8 +30,11 @@ function shiftN(bb) { return bb >> 8n; }
 function shiftS(bb) { return (bb & NOT_RANK8) << 8n; }
 function shiftNE(bb) { return (bb & NOT_H) >> 7n; }
 function shiftNW(bb) { return (bb & NOT_A) >> 9n; }
-function shiftSE(bb) { return (bb & NOT_A) << 9n; }
-function shiftSW(bb) { return (bb & NOT_H) << 7n; }
+// Diagonal shifts: ensure masking matches column movement
+// SE: row+1, col+1 -> must not start from H-file
+function shiftSE(bb) { return (bb & NOT_H) << 9n; }
+// SW: row+1, col-1 -> must not start from A-file
+function shiftSW(bb) { return (bb & NOT_A) << 7n; }
 
 const DIRS = [shiftE, shiftW, shiftN, shiftS, shiftNE, shiftNW, shiftSE, shiftSW];
 
@@ -251,138 +254,9 @@ export class AIEngine {
     let w1 = player === BLACK ? after.O : after.P;
     const meAfter = player === BLACK ? b1 : w1;
 
-    // Tactical pre-analysis for this root move
+    // Tactical pre-analysis for this root move: keep it minimal and only use it
+    // to inform search depth extensions (no direct scoring side-effects).
     const tac = flipCountsByDir(P0, O0, moveBit);
-    const flipsByDir = flipsForMoveByDirBB(P0, O0, moveBit);
-    const myFlipsMask = flipsForMoveBB(P0, O0, moveBit);
-    const vertMask = (flipsByDir[2] | flipsByDir[3]); // N+S
-    const horiMask = (flipsByDir[0] | flipsByDir[1]); // E+W
-    const diagMask = (flipsByDir[4] | flipsByDir[5] | flipsByDir[6] | flipsByDir[7]);
-    const isEdgeMove = (move.row === 0 || move.row === 7 || move.col === 0 || move.col === 7);
-    const tacticalBonus = (() => {
-      let bonus = 0;
-      const emptiesNow = 64 - popcnt(b1 | w1);
-
-      // Reward long directional flips and edge pressure
-      if (tac.maxLine >= 6) bonus += 360 + 80 * (tac.maxLine - 6);
-      if (tac.vertical >= 6) bonus += 260;
-      if (tac.vertical >= 7) bonus += 420;
-      if (tac.horizontal >= 6) bonus += 180;
-      if (tac.horizontal >= 7) bonus += 280;
-      if (isEdgeMove && tac.maxLine >= 5) bonus += 140;
-      // Generally value HV over diagonals (safer shape)
-      const hvTotal = tac.vertical + tac.horizontal;
-      if (emptiesNow <= 16) bonus += hvTotal * 18; else if (emptiesNow <= 32) bonus += hvTotal * 14; else bonus += hvTotal * 10;
-
-      // One-ply net flip heuristic (SEE-like):
-      // my immediate flips minus opponent's best immediate reply flips.
-      // Encourages "big, safe" captures even in midgame.
-      const oppP = (-player === BLACK) ? b1 : w1;
-      const oppO = (-player === BLACK) ? w1 : b1;
-      const oppMoves = legalMovesBB(oppP, oppO);
-      const oppPBefore = (-player === BLACK) ? black : white;
-      const oppOBefore = (-player === BLACK) ? white : black;
-      const oppMovesBefore = legalMovesBB(oppPBefore, oppOBefore);
-      let maxOppFlips = 0;
-      let unionOppFlips = 0n;
-      let oppCornerAfter = 0n;
-      let tmp = oppMoves;
-      while (tmp) {
-        const m2 = tmp & -tmp; tmp ^= m2;
-        if ((m2 & CORNER_MASK) !== 0n) oppCornerAfter |= m2;
-        const f2 = flipsForMoveBB(oppP, oppO, m2);
-        unionOppFlips |= f2;
-        const c2 = popcnt(f2);
-        if (c2 > maxOppFlips) maxOppFlips = c2;
-      }
-      const oppMobCnt = popcnt(oppMoves);
-      const net = tac.total - maxOppFlips;
-      if (emptiesNow <= 16) bonus += tac.total * 10 + net * 14; // late: emphasize both raw and net
-      else if (emptiesNow <= 32) bonus += net * 10; // midgame: prefer high net flips
-      else bonus += net * 6; // opening: still consider, but lighter
-
-      // Penalize giving opponent lots of immediate mobility
-      if (emptiesNow <= 16) bonus -= oppMobCnt * 18;
-      else if (emptiesNow <= 32) bonus -= oppMobCnt * 12;
-      else bonus -= oppMobCnt * 6;
-
-      // Strong boost for "flip a lot but hard to be flipped back immediately"
-      if (tac.total >= 8 && maxOppFlips <= 2) {
-        bonus += 320 + (tac.total - 8) * 44;
-      }
-
-      // Penalize only if THIS move newly enables corners
-      const oppCornerBefore = oppMovesBefore & CORNER_MASK;
-      const cornerNew = popcnt(oppCornerAfter & ~oppCornerBefore);
-      if (cornerNew > 0) {
-        bonus -= (emptiesNow >= 20 ? 500 : 360) * cornerNew;
-      }
-
-      // Reward protected axis flips (cannot be immediately recaptured in 1-ply)
-      const edgesMask = RANK1 | RANK8 | A_FILE | H_FILE;
-      const hvMask = vertMask | horiMask;
-      const safeHV = hvMask & ~unionOppFlips; // ours after move that opp cannot flip back immediately
-      const safeDiag = diagMask & ~unionOppFlips;
-      const safeEdgeHV = safeHV & edgesMask;
-      const cntSafeHV = popcnt(safeHV);
-      const cntSafeEdgeHV = popcnt(safeEdgeHV);
-      const cntSafeDiag = popcnt(safeDiag);
-      // Additional reward for flipping discs located on edges (even if not strictly safe)
-      const edgeHV = (hvMask) & edgesMask;
-      const cntEdgeHV = popcnt(edgeHV);
-      if (emptiesNow <= 16) {
-        bonus += cntSafeHV * 50 + cntSafeDiag * 12 + cntSafeEdgeHV * 80 + cntEdgeHV * 18;
-      } else if (emptiesNow <= 32) {
-        bonus += cntSafeHV * 38 + cntSafeDiag * 8 + cntSafeEdgeHV * 68 + cntEdgeHV * 14;
-      } else {
-        bonus += cntSafeHV * 30 + cntSafeDiag * 6 + cntSafeEdgeHV * 56 + cntEdgeHV * 12;
-      }
-
-      // Full line completion (entire row or column becomes ours)
-      const rowMask = 0xFFn << BigInt(move.row * 8);
-      const colMask = (A_FILE << BigInt(move.col));
-      const fullRow = (meAfter & rowMask) === rowMask;
-      const fullCol = (meAfter & colMask) === colMask;
-      // Very strong preference for capturing entire column/row
-      if (fullCol) bonus += 3800; // entire column captured
-      if (fullRow) bonus += 2600; // entire row captured
-
-      // Almost-full column/row (7 of 8 and no gap inside)
-      const myAfterBoard = meAfter;
-      const colCount = popcnt(myAfterBoard & colMask);
-      const rowCount = popcnt(myAfterBoard & rowMask);
-      if (!fullCol && colCount === 7) bonus += 900; // very strong preference to complete soon
-      if (!fullRow && rowCount === 7) bonus += 650;
-
-      // Edge move that harvests a lot vertically: amplify further
-      if (isEdgeMove && tac.vertical >= 5) bonus += 220 + (tac.vertical - 5) * 140;
-
-      // Edge anchored long run (from a corner along row/col)
-      const topCorner = bit(0, move.col), bottomCorner = bit(7, move.col);
-      const leftCorner = bit(move.row, 0), rightCorner = bit(move.row, 7);
-      // contiguous from top corner along column
-      if (meAfter & topCorner) {
-        let run = 0; let m = topCorner;
-        while (m && (meAfter & m)) { run++; m <<= 8n; }
-        if (run >= 6) bonus += 200 + 40 * (run - 5);
-      }
-      if (meAfter & bottomCorner) {
-        let run = 0; let m = bottomCorner;
-        while (m && (meAfter & m)) { run++; m >>= 8n; }
-        if (run >= 6) bonus += 200 + 40 * (run - 5);
-      }
-      if (meAfter & leftCorner) {
-        let run = 0; let m = leftCorner;
-        while (m && (meAfter & m)) { run++; m = shiftE(m); }
-        if (run >= 6) bonus += 160 + 30 * (run - 5);
-      }
-      if (meAfter & rightCorner) {
-        let run = 0; let m = rightCorner;
-        while (m && (meAfter & m)) { run++; m = shiftW(m); }
-        if (run >= 6) bonus += 160 + 30 * (run - 5);
-      }
-      return bonus;
-    })();
 
     // Depth extension for large line flips
     // Extensions: deepen search when tactical volatility is high
@@ -422,7 +296,9 @@ export class AIEngine {
         break;
       }
     }
-    return bestScore + tacticalBonus;
+    // Do not add tactical bonus into the returned score.
+    // Use tactical analysis only to inform ordering/extensions above.
+    return bestScore;
   }
 
   // Principal search (negamax). alpha/beta are in heuristic score domain.
@@ -439,6 +315,12 @@ export class AIEngine {
     const O = player === BLACK ? white : black;
     let moves = legalMovesBB(P, O);
     if (!moves) {
+      // If neither side can move, position is terminal even if empties > 0
+      if (!legalMovesBB(O, P)) {
+        const s = this.finalScore(black, white, player) * 200;
+        this.ttStore(black, white, player, depth, s, 0);
+        return s;
+      }
       // pass
       const s = -this.search(black, white, -player, depth - 1, -beta, -alpha, deadline, ply + 1);
       this.ttStore(black, white, player, depth, s, 0);
@@ -517,26 +399,98 @@ export class AIEngine {
     return best;
   }
 
-  // Exact endgame solver: returns final disc diff from current player's perspective
+  // Exact endgame solver (iterative): returns final disc diff from current player's perspective
+  // Rewritten iteratively to avoid deep recursion triggering RangeError in some environments.
   solveExact(black, white, player, deadline) {
-    if (performance.now() > deadline) return this.finalScore(black, white, player);
-    const empties = 64 - popcnt(black | white);
-    if (empties === 0) return this.finalScore(black, white, player);
-    const P = player === BLACK ? black : white;
-    const O = player === BLACK ? white : black;
-    const moves = legalMovesBB(P, O);
-    if (!moves) return -this.solveExact(black, white, -player, deadline);
-    let best = -Infinity;
-    let mset = moves;
-    while (mset) {
-      const m = mset & -mset; mset ^= m;
-      const child = applyMoveBB(P, O, m);
-      const nb = player === BLACK ? child.P : child.O;
-      const nw = player === BLACK ? child.O : child.P;
-      const s = -this.solveExact(nb, nw, -player, deadline);
-      if (s > best) best = s;
+    // Frame format:
+    // { b, w, p, stage, mset, best, childVal }
+    // stage: 0=init, 1=loop, 2=awaitPass, 3=awaitChild, 9=done
+    const stack = [{ b: black, w: white, p: player, stage: 0, mset: 0n, best: -Infinity, childVal: 0 }];
+    let ret = 0; // result of the last completed frame
+
+    while (stack.length) {
+      const f = stack[stack.length - 1];
+
+      // Time cutoff: approximate final score at this node
+      if (performance.now() > deadline) {
+        ret = this.finalScore(f.b, f.w, f.p);
+        stack.pop();
+        // Propagate to parent on next iteration
+        continue;
+      }
+
+      if (f.stage === 0) { // init
+        const empties = 64 - popcnt(f.b | f.w);
+        if (empties === 0) {
+          ret = this.finalScore(f.b, f.w, f.p);
+          stack.pop();
+          continue;
+        }
+        const P = f.p === BLACK ? f.b : f.w;
+        const O = f.p === BLACK ? f.w : f.b;
+        const moves = legalMovesBB(P, O);
+        if (!moves) {
+          // Check opponent moves
+          const oppMoves = legalMovesBB(O, P);
+          if (!oppMoves) {
+            ret = this.finalScore(f.b, f.w, f.p);
+            stack.pop();
+            continue;
+          }
+          // pass: value = -solveExact(b,w,-p)
+          f.stage = 2; // awaitPass
+          stack.push({ b: f.b, w: f.w, p: -f.p, stage: 0, mset: 0n, best: -Infinity, childVal: 0 });
+          continue;
+        }
+        // have moves: enumerate
+        f.mset = moves;
+        f.best = -Infinity;
+        f.stage = 1; // loop
+        continue;
+      }
+
+      if (f.stage === 2) { // awaitPass
+        // Child finished, result in ret
+        const s = -ret;
+        ret = s;
+        stack.pop();
+        continue;
+      }
+
+      if (f.stage === 1) { // loop over moves
+        if (f.mset === 0n) {
+          // done
+          ret = f.best;
+          stack.pop();
+          continue;
+        }
+        // pick next move bit
+        const m = f.mset & -f.mset; f.mset ^= m;
+        const P = f.p === BLACK ? f.b : f.w;
+        const O = f.p === BLACK ? f.w : f.b;
+        const child = applyMoveBB(P, O, m);
+        const nb = f.p === BLACK ? child.P : child.O;
+        const nw = f.p === BLACK ? child.O : child.P;
+        // schedule child
+        f.stage = 3; // awaitChild
+        stack.push({ b: nb, w: nw, p: -f.p, stage: 0, mset: 0n, best: -Infinity, childVal: 0 });
+        continue;
+      }
+
+      if (f.stage === 3) { // awaitChild
+        const s = -ret;
+        if (s > f.best) f.best = s;
+        // continue loop
+        f.stage = 1;
+        continue;
+      }
+
+      // Fallback safety: should not reach here
+      ret = this.finalScore(f.b, f.w, f.p);
+      stack.pop();
     }
-    return best;
+
+    return ret;
   }
 
   finalScore(black, white, player) {
@@ -643,8 +597,6 @@ export class AIEngine {
     const edgeDiff = myEdge - oppEdge;
 
     // longest horizontal/vertical runs (bias vs diagonal over-valuation)
-    const myBoard = player === BLACK ? black : white;
-    const oppBoard = player === BLACK ? white : black;
     const longestRun = (bb, isVertical) => {
       let best = 0;
       if (!isVertical) {

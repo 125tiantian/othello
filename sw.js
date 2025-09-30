@@ -1,5 +1,5 @@
 // 极简 PWA Service Worker：预缓存核心资源 + 缓存优先
-const CACHE_NAME = 'othello-pwa-v1';
+const CACHE_NAME = 'othello-pwa-v2';
 const CORE_ASSETS = [
   './',
   'index.html',
@@ -46,4 +46,3 @@ self.addEventListener('fetch', (e) => {
     })
   );
 });
-
