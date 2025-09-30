@@ -739,7 +739,7 @@ button.sm { padding: 6px 10px; font-size: 0.85rem; }
   backdrop-filter: blur(8px) saturate(1.05);
   transform-origin: center;
   position: relative;
-  z-index: 1;
+  z-index: 3;
   animation: goPop var(--mid) var(--ease-out);
   transition: transform var(--mid) var(--ease);
 }
@@ -757,16 +757,24 @@ button.sm { padding: 6px 10px; font-size: 0.85rem; }
 .gameover.docked .go-card {
   position: absolute;
   top: 0; left: 50%;
-  transform: translate(-50%, -88%) scale(0.86);
+  /* collapse to just above board (small gap) */
+  transform: translate(-50%, calc(-100% - 6px)) scale(0.90);
   min-width: clamp(220px, 36vw, 420px);
   pointer-events: auto;
   transition: transform var(--mid) var(--ease);
 }
-/* 悬停棋盘或显式 reveal 时，展开胜利卡 */
-.board-wrap:hover .gameover.docked .go-card,
-.gameover.docked.reveal .go-card {
+/* 热区或显式 reveal 时，展开胜利卡；悬停卡片自身保持展开 */
+.go-hotspot:hover + .gameover.docked .go-card,
+.gameover.docked.reveal .go-card,
+.gameover.docked .go-card:hover {
   transform: translate(-50%, 0) scale(1);
 }
+
+/* 顶部热区：负责 hover 捕获（默认始终存在；未 dock 时被覆盖层拦截） */
+.go-hotspot { position: absolute; left: 50%; top: 0; transform: translate(-50%, -100%); width: clamp(220px, 36vw, 420px); height: 20px; z-index: 2; pointer-events: auto; }
+.go-hotspot::after { content: ''; position: absolute; inset: 0; border-radius: 14px; opacity: 0; transition: opacity 160ms ease; }
+.go-hotspot:hover::after { opacity: 0.18; }
+
 
 /* 小提示：悬停棋盘即可展开（自动淡出） */
 .go-hint {
@@ -921,6 +929,8 @@ kbd {
 /* ripple 已移除 */
 
 /* Responsive */
+/* 默认隐藏移动端设置抽屉的标题栏，仅在小屏显示 */
+.mobile-settings-header { display: none; }
 @media (max-width: 1080px) {
   .top-bar {
     grid-template-columns: 1fr;

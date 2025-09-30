@@ -669,7 +669,7 @@ export class OthelloApp {
     if (!localStorage.getItem('go-dock-hint')) {
       const hint = document.createElement('div');
       hint.className = 'go-hint';
-      hint.textContent = '将鼠标移到棋盘上方可展开胜利卡';
+      hint.textContent = '将鼠标移到上方细小区域可展开胜利卡';
       go.appendChild(hint);
       setTimeout(() => { hint.remove(); }, 2200);
       localStorage.setItem('go-dock-hint', '1');

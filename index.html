@@ -70,6 +70,8 @@
       <div class="board-wrap">
         <div id="board" aria-label="棋盘" class="show-coords"></div>
         <div class="board-shadow"></div>
+        <!-- Dock hotspot: a small invisible bar above board to reveal the card -->
+        <div class="go-hotspot" aria-hidden="true"></div>
         <div id="gameover" class="gameover" hidden>
           <div class="go-card">
             <div class="go-title"></div>
@@ -81,6 +83,7 @@
           </div>
           <div class="go-effects" aria-hidden="true"></div>
         </div>
+        <!-- Dock hotspot moved before gameover for :hover + sibling selector -->
       </div>
       <!-- 叠加层遮罩（移动端设置抽屉） -->
       <div id="overlay-scrim" class="overlay-scrim" hidden></div>
