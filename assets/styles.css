@@ -937,14 +937,23 @@ kbd {
   }
   .arena {
     grid-template-columns: 1fr;
-    justify-items: center;
+    justify-items: center; /* ensure all children center on small screens */
   }
+  /* 进一步确保棋盘容器在移动端水平居中 */
+  .board-wrap { justify-self: center; margin-inline: auto; }
   /* 棋盘细节微调：缩小边距与网格缝隙，增大有效棋面 */
   #board { gap: calc(var(--cell-size) * 0.035); padding: calc(var(--cell-size) * 0.08); border-radius: clamp(14px, 3vw, 22px); }
   /* 移动端：默认隐藏侧栏，避免占据棋盘下方空间 */
   .sidebar { display: none; }
   /* 顶部计分板显示，侧栏中的计分板隐藏（避免重复） */
-  .mobile-score { display: block; width: min(640px, 96vw); }
+  /* 使用容器相对宽度，避免 96vw 超出 .app 内容区导致看起来“偏右” */
+  .mobile-score {
+    display: block;
+    width: 100%;
+    max-width: 640px;
+    margin-inline: auto;
+    justify-self: center;
+  }
   .sidebar .score-panel { display: none; }
   /* 显示“设置”按钮，隐藏专注按钮 */
   #settings { display: inline-flex !important; }
